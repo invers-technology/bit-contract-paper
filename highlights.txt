@@ -1,0 +1,5 @@
+• Defines UTXO smart contracts via lock, predicate, and prescribed transitions
+• Introduces typed Locked UTXO with explicit template references
+• Enforces deterministic admissibility without mutable global state
+• Bounds audit effort by template-level verification constraints
+• Demonstrates escrow-style workflows with safety and liveness guarantees
