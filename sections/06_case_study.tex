@@ -25,11 +25,11 @@ S2: Refund to Buyer（返金）：資金がBuyerへ返還
 	\item 取消およびタイムアウトにより $S0/S0D/S0X \to S2$ が可能。
 \end{itemize}
 
-S0: $p\,\mathrm{UTXO}_A \to p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0)$
-S0D: $p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0) \to p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0D)$
-S0X: $p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0D) \to p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0X)$
-S1: $p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}\in\{S0D,S0X\}) \to p(1 - m)\,\mathrm{UTXO}_B \text{ and } p \cdot m\,\mathrm{UTXO}_C$
-S2: $p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}\in\{S0,S0D,S0X\}) \to p\,\mathrm{UTXO}_A$
+S0: $p\,\mathrm{UTXO}_A \to p\,\mathrm{UTXO}^\star(\mathsf{c}_{id}, \mathsf{stateTag}=S0)$
+S0D: $p\,\mathrm{UTXO}^\star(\mathsf{c}_{id}, \mathsf{stateTag}=S0) \to p\,\mathrm{UTXO}^\star(\mathsf{c}_{id}, \mathsf{stateTag}=S0D)$
+S0X: $p\,\mathrm{UTXO}^\star(\mathsf{c}_{id}, \mathsf{stateTag}=S0D) \to p\,\mathrm{UTXO}^\star(\mathsf{c}_{id}, \mathsf{stateTag}=S0X)$
+S1: $p\,\mathrm{UTXO}^\star(\mathsf{c}_{id}, \mathsf{stateTag}\in\{S0D,S0X\}) \to p(1 - m)\,\mathrm{UTXO}_B \text{ and } p \cdot m\,\mathrm{UTXO}_C$
+S2: $p\,\mathrm{UTXO}^\star(\mathsf{c}_{id}, \mathsf{stateTag}\in\{S0,S0D,S0X\}) \to p\,\mathrm{UTXO}_A$
 
 \subsection{Template Constructor Arguments}
 マージン率: $m$
@@ -38,7 +38,7 @@ S2: $p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}\in\{S0,S0D,S0X\}) \t
 
 \subsection{Template Constructor Arguments}
 $\mathrm{Constructor}(m, d, t)$
-Operatorが変数の初期化と CreateSC の送信を行い、$\mathsf{deployerAddr}$ として $\mathsf{cid}$ が導出される
+Operatorが変数の初期化と CreateSC の送信を行い、$\mathsf{deployerAddr}$ として $\mathsf{c}_{id}$ が導出される
 $d$：SellerConfirm後の“検収猶予”
 $t$：全体の最終期限（$t \ge d$ を仮定）
 
@@ -76,7 +76,7 @@ $\mathrm{ContractTimeout}()$
 誰でも起動可能
 $t$の経過でFinal TransitionのBuyerに資金移動し、$S2$
 
-遷移ラベルごとの $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ を表に整理する。表中の不変条件は S=Safety, A=Authority Safety, L=Liveness を表す。取消フラグは Locked UTXO に付随する補助情報として扱い、$(\mathsf{cid}, \mathsf{stateTag})$ と同様に script / aux / commitment / metadata に埋め込まれ得る。
+遷移ラベルごとの $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ を表に整理する。表中の不変条件は S=Safety, A=Authority Safety, L=Liveness を表す。取消フラグは Locked UTXO に付随する補助情報として扱い、$(\mathsf{c}_{id}, \mathsf{stateTag})$ と同様に script / aux / commitment / metadata に埋め込まれ得る。
 \begin{table}[htbp]
 	\centering
 	\footnotesize

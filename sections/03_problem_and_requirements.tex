@@ -89,17 +89,17 @@ R2: Deterministic admissibility（許容条件の決定性）
 $S0 \to S1$（支払）および$S0 \to S2$（返金）の許容条件を、外部の裁量ではなく検証可能な条件として表現できること。
 
 R3: Bounded auditability（監査可能性の上限）
-契約ロジックはテンプレートとして制約され、利用者・監査者が点検できる複雑性の上限を持つこと。
+契約ロジックはテンプレートとして制約され、利用者・監査者が点検できる複雑性の上限を持つこと。テンプレートは作成後にアップグレードできない。
 
 R4: Local state / minimal shared state
-グローバルステートへの依存を避け、(e)UTXO等の局所状態とロック指向の資産移転で表現できること。
+グローバルステートへの依存を避け、(e)UTXO等の局所状態とロック指向の資産移転で表現できること。共有状態は $\mathsf{stateTag}$ のみに限定する。
 
 \subsection{Research Questions}
 \paragraph{RQ1（決定的表現可能性）}
 VMを用いず、形式化可能なテンプレート集合として、IOM-CEにおける $\mathrm{deposit} / \mathrm{release} / \mathrm{refund}$ を決定的に表現できるか？
 
 \paragraph{命題 P1（決定的表現可能性）}
-焦点ケース（IOM-CE）の状態機械（$S0, S0D, S0X, S1, S2$）と各遷移ラベル $\ell$ について、テンプレート $\tau$ とインスタンス $\mathsf{cid}$ を固定すれば、任意の $\Sigma$ と $tx$ に対して $\mathsf{Pred}_{\tau,\ell}(\Sigma, tx, \mathsf{cid})$ の真偽が一意に定まり、真である場合に限り $\mathsf{out}(tx) \in \mathsf{TransSpec}_{\tau,\ell}(\Sigma, \mathsf{cid})$ が成立する。
+焦点ケース（IOM-CE）の状態機械（$S0, S0D, S0X, S1, S2$）と各遷移ラベル $\ell$ について、テンプレート $\tau$ とインスタンス $\mathsf{c}_{id}$ を固定すれば、任意の $\Sigma$ と $tx$ に対して $\mathsf{Pred}_{\tau,\ell}(\Sigma, tx, \mathsf{c}_{id})$ の真偽が一意に定まり、真である場合に限り $\mathsf{out}(tx) \in \mathsf{TransSpec}_{\tau,\ell}(\Sigma, \mathsf{c}_{id})$ が成立する。
 
 \paragraph{RQ2（運用裁量の縮退）}
 そのとき、運用裁量をどこまで縮退／移送できるか？

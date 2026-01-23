@@ -9,17 +9,19 @@
 
 \subsection{UTXO ステートマシン}
 本節は Bitcoin の Script や補助入力構造を忠実に再現しない。UTXO 集合と遷移として抽象化し、テンプレート参照・状態タグ・検証述語・出力仕様に必要な最小要素のみを定義する。署名検証等の基礎規則は抽象述語 $\mathsf{BaseValid}$ にまとめる。
+\paragraph{Notation}
+$\parallel$ は連結（concatenation）を表し、$H(\cdot)$ は暗号学的ハッシュ関数を表す。記号の使い分けとして、$\mathsf{index}$ はインクリメントされる自然数の添字（例：outpoint の $i$、テンプレート参照の $\mathsf{t}_{index}$）を指し、$\mathsf{id}$ はハッシュ関数等で導出される識別子（例：$\mathsf{tx}_{id}, \mathsf{c}_{id}$）を指す。$\mathsf{Addr}$ はアドレス集合であり、$\mathsf{addr} \in \mathsf{Addr}$ は P2PKH などの通常アドレスや script-hash 的な識別子を抽象化したものである（実装上は script/commitment/metadata に埋め込める）。
 \paragraph{Definition 1（UTXO と Outpoint）}
-Outpoint を $\mathsf{op}=(\mathsf{txid}, i)$ とし、UTXO を次で表す：
+Outpoint を $\mathsf{op}=(\mathsf{tx}_{id}, i)$ とし、UTXO を次で表す：
 \begin{equation}
-	u=(\mathsf{op}, v)
+	u=(\mathsf{op}, v, \mathsf{addr})
 \end{equation}
 \begin{equation}
-	u^\star=(\mathsf{op}, v, \mathsf{cid}, \mathsf{stateTag})
+	u^\star=(\mathsf{op}, v, \mathsf{addr}, \mathsf{c}_{id}, \mathsf{stateTag})
 \end{equation}
-ここで $v$ は額面、$u$ は通常 UTXO、$u^\star$ はテンプレート参照と状態タグを伴う Locked UTXO である。
-\textbf{実装上は、$(\mathsf{cid}, \mathsf{stateTag})$ は script / aux / commitment / metadata に埋め込まれ得る抽象化であり、UTXO に独立の data 欄があることを仮定しない。}
-（Bitcoin Script 相当では $(\mathsf{cid}, \mathsf{stateTag})$ を script/commitment/metadata として埋め込める。eUTXO では datum として扱える。）
+ここで $v$ は額面、$\mathsf{addr}$ は所有者（支出権限）を表すアドレス、$u$ は通常 UTXO、$u^\star$ はテンプレート参照と状態タグを伴う Locked UTXO である。
+\textbf{実装上は、$(\mathsf{c}_{id}, \mathsf{stateTag})$ は script / aux / commitment / metadata に埋め込まれ得る抽象化であり、UTXO に独立の data 欄があることを仮定しない。$\mathsf{addr}$ についても同様に埋め込み可能である。}
+（Bitcoin Script 相当では $(\mathsf{c}_{id}, \mathsf{stateTag})$ を script/commitment/metadata として埋め込める。eUTXO では datum として扱える。）
 
 \paragraph{Definition 2（台帳状態）}
 台帳状態を
@@ -33,7 +35,7 @@ Outpoint を $\mathsf{op}=(\mathsf{txid}, i)$ とし、UTXO を次で表す：
 \begin{equation}
 	tx := (\mathsf{in}, \mathsf{out}, \mathsf{aux})
 \end{equation}
-とする。$\mathsf{in}$ は入力 outpoint 列、$\mathsf{out}$ は出力 UTXO 列、$\mathsf{aux}$ は署名・期限情報など検証に必要な補助入力である。
+とする。$\mathsf{in}$ は入力 outpoint 列 $\mathsf{in}:=[\mathsf{op}_j]$、$\mathsf{out}$ は出力 UTXO 列、$\mathsf{aux}$ は署名・期限情報など検証に必要な補助入力である。Bitcoinと同様に、本稿のトランザクションは from/to アドレスを明示的なフィールドとして含まない。
 
 \paragraph{Definition 4（基礎検証：UTXO 妥当性）}
 $tx$ が $\Sigma$ 上で基礎的に妥当であるとは、$\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たすことをいう。
@@ -75,31 +77,32 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 \paragraph{Definition 6（Template：普遍）}
 テンプレート $\tau \in \Gamma$ は次の構造を持つ：
 \begin{equation}
-	\tau := (\mathsf{tid}, \mathsf{ArgSchema}, \mathsf{Logic}, \mathsf{TransSpec})
+	\tau := (\mathsf{t}_{index}, \mathsf{InitParams}, \mathsf{Logic}, \mathsf{TransSpec})
 \end{equation}
 \begin{itemize}
-	\item $\mathsf{tid}$：テンプレート ID（固定）
-	\item $\mathsf{ArgSchema}$：引数の型・制約
-	\item $\mathsf{Logic}$：検証ロジック（validator）。$\mathsf{Pred}$ の実装に相当する。
-	\item $\mathsf{TransSpec}$：許される状態遷移ラベルと、それぞれの出力仕様
+	\item $\mathsf{t}_{index}$：テンプレート index（固定）
+	\item $\mathsf{InitParams}$：初期化引数スロット（型・制約）。CreateSC の Constructor 引数により初期化され、以後は定数として更新されない。
+	\item $\mathsf{Logic}$：検証ロジック（validator）。引数、引数の型、処理（$\mathsf{Pred}$ の実装）の三つから構成される。
+	\item $\mathsf{TransSpec}$：状態と生成するトランザクションの形の二つから成る出力仕様
 \end{itemize}
 テンプレートは \textbf{普遍（protocol-level constant）} であり、台帳状態の更新で変化しない（R3, R4）。
+テンプレートは、ブロックチェーンネットワークの初期化時から不変である。
 
 \paragraph{Definition 7（Contract Instance：インスタンス記述子）}
 コントラクト・インスタンス $I$ は
 \begin{equation}
-	I := (\mathsf{cid}, \mathsf{tid}, \vec{a})
+	I := (\mathsf{c}_{id}, \mathsf{t}_{index}, \vec{a})
 \end{equation}
-で表す。$\vec{a}=(a_1,\dots,a_k)$ はテンプレートが定める初期化引数列であり、当事者集合（例：Buyer/Seller/Operator）や必要情報は $\vec{a}$ に含まれる前提とするため、$\mathsf{participants}$ のような別フィールドは置かない。
-$\mathsf{cid}$ は決定的に導出される識別子であり、例えば
+で表す。$\vec{a}=(a_1,\dots,a_k)$ は $\mathsf{InitParams}$ に対応する初期化引数列であり、CreateSC の Constructor 引数として $\mathsf{InitParams}$ を初期化し、以後は更新されない。当事者集合（例：Buyer/Seller/Operator）や必要情報は $\vec{a}$ に含まれる前提とするため、$\mathsf{participants}$ のような別フィールドは置かない。コントラクトインスタンスの内部変数（$\mathsf{InitParams}$）は、CreateSC によって生成された際から不変である。
+$\mathsf{c}_{id}$ は決定的に導出される識別子であり、例えば
 \begin{equation}
-	\mathsf{cid} := H(\mathsf{deployerAddr} \parallel \mathsf{tid} \parallel \vec{a})
+	\mathsf{c}_{id} := H(\mathsf{deployerAddr} \parallel \mathsf{t}_{index} \parallel \vec{a})
 \end{equation}
 のように作れる（重要なのは同一入力から一意であること）。ここで $\mathsf{deployerAddr}$ は CreateSC/Lock を作成する主体（デプロイヤ／作成者）のアドレスである。これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（R2, R3）。
 
 \paragraph{Definition 8（Locked UTXO：型付き状態）}
 Locked UTXO は、単なる script 断片ではなくテンプレート参照と状態タグを伴う型付き状態である、という設計選好を仕様として固定する。
-Locked UTXO $u^\star$（Definition 1）において、$\mathsf{cid}$ は参照先インスタンス、$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）である。本稿では $\mathsf{stateTag}$ を共有される唯一のグローバルステートとして扱う。
+Locked UTXO $u^\star$（Definition 1）において、$\mathsf{c}_{id}$ は参照先インスタンス、$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）である。本稿では $\mathsf{stateTag}$ を共有される唯一のグローバルステートとして扱う。
 実装上の埋め込みは Definition 1 の注記に同じであり、独立の状態欄を仮定しない。
 これにより「条件を script 断片に依存させる」から、「状態タグとテンプレート参照により検証する」へと、監査可能性が上限付きの表現に移る。
 
@@ -108,8 +111,8 @@ Locked UTXO $u^\star$（Definition 1）において、$\mathsf{cid}$ は参照�
 
 \paragraph{Definition 9（Contract Create / Lock）}
 \begin{itemize}
-	\item CreateSC：$\Gamma$ 内のテンプレート $\mathsf{tid}$ と引数 $\vec{a}$、および $\mathsf{deployerAddr}$ を参照し、$\mathsf{cid}$ を生成するトランザクション。
-	\item Lock：通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。出力には $(\mathsf{cid}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。
+	\item CreateSC：$\Gamma$ 内のテンプレート $\mathsf{t}_{index}$ と引数 $\vec{a}$、および $\mathsf{deployerAddr}$ を参照し、$\mathsf{c}_{id}$ を生成するトランザクション。
+	\item Lock：通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。Lock はインスタンス化された $\mathsf{c}_{id}$ に対して送信され、$\mathsf{stateTag}$ を初期状態に持つ $u^\star$ を生成する。出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。
 \end{itemize}
 
 \paragraph{Definition 10（Release / Transition）}
@@ -125,7 +128,7 @@ Locked UTXO $u^\star$ を入力として消費するトランザクションを 
 $\mathsf{Pred}$ は $\Sigma$ と $tx$ の $\mathsf{in}/\mathsf{out}/\mathsf{aux}$ を参照して決定的に真偽が定まる述語である。
 このとき、次を満たすときに限り $tx$ は admissible とする。
 \begin{enumerate}
-	\item[(i)] 述語の成立：$\mathsf{Pred}_{\tau,\ell}(\Sigma, tx, \mathsf{cid}) = \mathsf{true}$
+	\item[(i)] 述語の成立：$\mathsf{Pred}_{\tau,\ell}(\Sigma, tx, \mathsf{c}_{id}) = \mathsf{true}$
 	\item[(ii)] 出力の一致：$\mathsf{out}$ が $\mathsf{TransSpec}_{\tau,\ell}$ に一致（受益者・配分・ロック継続・次状態タグ等）
 \end{enumerate}
 

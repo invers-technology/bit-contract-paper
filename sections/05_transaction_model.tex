@@ -1,41 +1,30 @@
 \section{Transaction Model}
-本章では、4章で定義したテンプレート枠組みを「トランザクションの型（classes）」として一般形としての作成・実行・確定の流れを定める。
+本章では、UTXOを用いたスマートコントラクトの実現に関するトランザクションを論じる。
+4章で与えたテンプレート／インスタンス／Locked UTXO および admissibility の定義を前提に、トランザクションの型（classes）として作成・実行・確定の流れを整理する。
+本章で扱うトランザクションは、Contract Creation（CreateSC）、Contract Lock（Lock）、Contract Execution（$tx_\ell$）、Contract Finalize（$tx_{\ell_{\mathrm{final}}}$）の4種類である。
 
-\subsection{状態の担体}
-テンプレートは次の構造を持つプロトコル定数として与える。
+\subsection{Creation}
+Definition 9 の CreateSC に対応する。CreateSC は $\mathsf{out}$ に $\mathsf{to}=0x0$ の出力（marker/burn）を含み、$\mathsf{aux}$ に $\mathsf{t}_{index}$ と $\mathsf{InitParams}$ を含む。さらに
 \begin{equation}
-	\tau := (\mathsf{tid}, \mathsf{ArgSchema}, \mathsf{Logic}, \mathsf{TransSpec}), \quad \tau \in \Gamma
+	\mathsf{TypeCheck}(\mathsf{InitParams}, \mathsf{ArgSchema}[\mathsf{t}_{index}])=\mathsf{true}
 \end{equation}
-ここで $\mathsf{Logic}$ は $\mathsf{Pred}$ の実装に相当する検証ロジックである。
-インスタンスは
+を満たし、$\mathsf{c}_{id}$ は
 \begin{equation}
-	I := (\mathsf{cid}, \mathsf{tid}, \vec{a})
+	\mathsf{c}_{id} := H(\mathsf{deployerAddr} \parallel \mathsf{t}_{index} \parallel \mathsf{InitParams})
 \end{equation}
-とし、$\mathsf{cid}$ は $H(\mathsf{deployerAddr} \parallel \mathsf{tid} \parallel \vec{a})$ から決定的に導出される（一意性を要件とする）。ここで $\mathsf{deployerAddr}$ は CreateSC/Lock を作成する主体のアドレスである。
+により決定的に導出される。ここで $\mathsf{ArgSchema}[\mathsf{t}_{index}]$ はテンプレートの Constructor 引数スキーマである。
 
-Locked UTXO は
-\begin{equation}
-	u^\star := (\mathsf{op}, v, \mathsf{cid}, \mathsf{stateTag})
-\end{equation}
-とし、$\mathsf{stateTag}$ は有限個の状態ラベルである。実装上は $(\mathsf{cid}, \mathsf{stateTag})$ が script / aux / commitment / metadata に埋め込まれ得る抽象化であり、UTXO に独立の data 欄を仮定しない。すなわち、状態は Locked UTXO に担持される。
-共有される状態語彙は $\mathsf{stateTag}$ に限定し、これが唯一のグローバルステートである。
+\subsection{Lock}
+Definition 9 の Lock に対応する。通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。
+出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。
+CreateSC と Lock は実装上同一Txに畳めるが、概念上は分離して記述する。
 
-\subsection{トランザクションの3クラス}
-\paragraph{Contract Creation Transaction（CreateSC）}
-テンプレート $\mathsf{tid}$ と引数 $\vec{a}$、および $\mathsf{deployerAddr}$ を参照して $\mathsf{cid}$ を生成するトランザクションである。本章では $\mathsf{cid}$ が決定的に導出されることのみを要件として示す。
+\subsection{Execution}
+Locked UTXO $u^\star$ を入力として消費するトランザクション $tx_\ell$（$\ell$ は遷移ラベル）を指す。
+admissible 判定は第4章の $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ に従う。
 
-\paragraph{Contract Lock Transaction（Lock）}
-通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力するトランザクションである。出力には $(\mathsf{cid}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。CreateSC と Lock は実装上同一Txに畳めるが、概念上は分離して記述する。
+継続遷移であれば $\mathsf{out}(tx)$ は次状態の $u^{\star\prime}(\dots,\mathsf{c}_{id}, \mathsf{stateTag}=s')$ を含み、終端遷移であれば受益者への通常 UTXO（およびお釣り等）のみを含む。
 
-\paragraph{Contract Execution Transaction（$tx_\ell$）}
-Locked UTXO $u^\star$ を入力として消費するトランザクション $tx_\ell$（$\ell$ は遷移ラベル）を指す。型注釈として
-\begin{equation}
-	\mathsf{Pred}_{\tau,\ell} : \Sigma \times \mathsf{Tx} \times \mathsf{CID} \to \{\mathsf{true}, \mathsf{false}\}, \quad
-	\mathsf{TransSpec}_{\tau,\ell} : \Sigma \times \mathsf{CID} \to \mathcal{P}(\mathsf{Out})
-\end{equation}
-を置く。$\mathsf{Pred}_{\tau,\ell}$ は $\Sigma$ と $tx$ の $\mathsf{in}/\mathsf{out}/\mathsf{aux}$ を参照して決定的に真偽が定まる。$tx_\ell$ が admissible であるとは、(i) $\mathsf{Pred}_{\tau,\ell}(\Sigma, tx, \mathsf{cid})=\mathsf{true}$、かつ (ii) $\mathsf{out}(tx) \in \mathsf{TransSpec}_{\tau,\ell}(\Sigma, \mathsf{cid})$ を満たすことをいう。
-
-継続遷移であれば $\mathsf{out}(tx)$ は次状態の $u^{\star\prime}(\dots,\mathsf{cid}, \mathsf{stateTag}=s')$ を含み、終端遷移であれば受益者への通常 UTXO（およびお釣り等）のみを含む。
-
-\subsection{Finalize / Timeout（Execution の特別なラベル）}
-テンプレートは誰でも起動可能な確定遷移を持ち得る。期限経過 $\operatorname{after}(d)$ や $\operatorname{after}(t)$ に対応する遷移ラベル $\ell_{\mathrm{final}}$ を与え、上の admissibility と同じ枠組みで検証可能にする。これにより資金が永久拘束されないこと（liveness/decisiveness）を仕様として扱える。
+\subsection{Finalize}
+Definition 11 で導入した確定遷移に対応する。
+期限経過 $\operatorname{after}(d)$ や $\operatorname{after}(t)$ に対応する遷移ラベル $\ell_{\mathrm{final}}$ を与え、admissibility と同じ枠組みで検証可能にする。
