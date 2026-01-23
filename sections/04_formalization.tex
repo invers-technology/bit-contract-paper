@@ -1,21 +1,25 @@
 \section{Formalization}
 本章の目的は、Bitcoin を UTXO 集合を状態、トランザクションを遷移とするステートマシンとして再定式化し、その上でスマートコントラクトを (1) 資産の拘束（lock）(2) 解放条件（unlock predicate）(3) 条件成立時に許される出力（prescribed transition / template）として形式的に定義することである。
 
-本稿は 汎用 VM による任意計算と mutable global state（共有可変ストレージ）を採用しない。
+本稿は 汎用 VM による任意計算と広範な mutable global state（共有可変ストレージ）を採用しない。
 代わりに、コントラクトは テンプレート（template）として事前に制約され、インスタンス化はテンプレート参照と引数によって与えられる。
-共有状態は最小化され、必要であればテンプレート集合や参照情報は immutable global registry（不変レジストリ）として保持し得る（R4 に整合）。
+共有される状態は $\mathsf{stateTag}$ に限定し、テンプレートが定める有限ラベルとしてグローバルに解釈される唯一の状態語彙とする。必要であればテンプレート集合や参照情報は immutable global registry（不変レジストリ）として保持し得る（R4 に整合）。
 
 本章は「一般形式（general form）」までを与え、ユースケース適用は次章でテンプレート群（deposit/release/refund）として具体化する。
 
 \subsection{UTXO ステートマシン}
+本節は Bitcoin の Script や補助入力構造を忠実に再現しない。UTXO 集合と遷移として抽象化し、テンプレート参照・状態タグ・検証述語・出力仕様に必要な最小要素のみを定義する。署名検証等の基礎規則は抽象述語 $\mathsf{BaseValid}$ にまとめる。
 \paragraph{Definition 1（UTXO と Outpoint）}
 Outpoint を $\mathsf{op}=(\mathsf{txid}, i)$ とし、UTXO を次で表す：
 \begin{equation}
-	u=(\mathsf{op}, v, \mathsf{lockScript}, \mathsf{data})
+	u=(\mathsf{op}, v)
 \end{equation}
-ここで $v$ は額面、$\mathsf{lockScript}$ は消費条件、$\mathsf{data}$ は（本稿で導入する）テンプレート参照や状態タグ等の付随データである。
-\textbf{実装上は、$\mathsf{data}$ は script / witness / commitment / metadata に埋め込む抽象化であり、UTXO に独立の data 欄があることを仮定しない。}
-（Bitcoin Script 相当では $\mathsf{data}$ を script/commitment/metadata として埋め込む。eUTXO では datum として扱える。）
+\begin{equation}
+	u^\star=(\mathsf{op}, v, \mathsf{cid}, \mathsf{stateTag})
+\end{equation}
+ここで $v$ は額面、$u$ は通常 UTXO、$u^\star$ はテンプレート参照と状態タグを伴う Locked UTXO である。
+\textbf{実装上は、$(\mathsf{cid}, \mathsf{stateTag})$ は script / aux / commitment / metadata に埋め込まれ得る抽象化であり、UTXO に独立の data 欄があることを仮定しない。}
+（Bitcoin Script 相当では $(\mathsf{cid}, \mathsf{stateTag})$ を script/commitment/metadata として埋め込める。eUTXO では datum として扱える。）
 
 \paragraph{Definition 2（台帳状態）}
 台帳状態を
@@ -27,20 +31,21 @@ Outpoint を $\mathsf{op}=(\mathsf{txid}, i)$ とし、UTXO を次で表す：
 \paragraph{Definition 3（トランザクション）}
 トランザクション $tx$ を
 \begin{equation}
-	tx := (\mathsf{in}, \mathsf{out}, \mathsf{wit})
+	tx := (\mathsf{in}, \mathsf{out}, \mathsf{aux})
 \end{equation}
-とする。$\mathsf{in}$ は入力 outpoint 列、$\mathsf{out}$ は出力 UTXO 列、$\mathsf{wit}$ は署名等の witness である。
+とする。$\mathsf{in}$ は入力 outpoint 列、$\mathsf{out}$ は出力 UTXO 列、$\mathsf{aux}$ は署名・期限情報など検証に必要な補助入力である。
 
 \paragraph{Definition 4（基礎検証：UTXO 妥当性）}
-$tx$ が $\Sigma$ 上で基礎的に妥当であるとは、次を満たすことをいう。
+$tx$ が $\Sigma$ 上で基礎的に妥当であるとは、$\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たすことをいう。
+$\mathsf{BaseValid}$ は入力参照の健全性・二重消費排除・署名等による消費権限検証・価値保存/手数料規則を含む抽象述語であり、例えば次を含む。
 \begin{enumerate}
 	\item[(i)] 入力が $U$ の要素を参照し、二重消費がない。
-	\item[(ii)] 各入力の $\mathsf{lockScript}$ が $\mathsf{wit}$ により満たされる。
+	\item[(ii)] 署名等により消費権限が検証できる。
 	\item[(iii)] 価値保存（$\sum v_{\mathrm{in}}=\sum v_{\mathrm{out}}+\mathsf{fee}$）等のプロトコル規則を満たす。
 \end{enumerate}
 
 \paragraph{遷移規則（状態更新）}
-$tx$ が上の基礎妥当性を満たし、かつ admissible（Definition 10）であるとき、状態遷移
+$tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ admissible（Definition 10）であるとき、状態遷移
 \begin{equation}
 	\Sigma \xrightarrow{tx} \Sigma'
 \end{equation}
@@ -75,7 +80,7 @@ $tx$ が上の基礎妥当性を満たし、かつ admissible（Definition 10）
 \begin{itemize}
 	\item $\mathsf{tid}$：テンプレート ID（固定）
 	\item $\mathsf{ArgSchema}$：引数の型・制約
-	\item $\mathsf{Logic}$：Computational Law（例：Stipula）等で記述された検証ロジック
+	\item $\mathsf{Logic}$：検証ロジック（validator）。$\mathsf{Pred}$ の実装に相当する。
 	\item $\mathsf{TransSpec}$：許される状態遷移ラベルと、それぞれの出力仕様
 \end{itemize}
 テンプレートは \textbf{普遍（protocol-level constant）} であり、台帳状態の更新で変化しない（R3, R4）。
@@ -83,32 +88,27 @@ $tx$ が上の基礎妥当性を満たし、かつ admissible（Definition 10）
 \paragraph{Definition 7（Contract Instance：インスタンス記述子）}
 コントラクト・インスタンス $I$ は
 \begin{equation}
-	I := (\mathsf{cid}, \mathsf{tid}, \vec{a}, \mathsf{participants})
+	I := (\mathsf{cid}, \mathsf{tid}, \vec{a})
 \end{equation}
-で表す。$\vec{a}=(a_1,\dots,a_k)$ はテンプレートが定める初期化引数列、$\mathsf{participants}$ は（必要なら）当事者集合（例：Buyer/Seller/Operator）である。
+で表す。$\vec{a}=(a_1,\dots,a_k)$ はテンプレートが定める初期化引数列であり、当事者集合（例：Buyer/Seller/Operator）や必要情報は $\vec{a}$ に含まれる前提とするため、$\mathsf{participants}$ のような別フィールドは置かない。
 $\mathsf{cid}$ は決定的に導出される識別子であり、例えば
 \begin{equation}
-	\mathsf{cid} := H(\mathsf{createTxid} \parallel i \parallel \mathsf{tid} \parallel \vec{a})
+	\mathsf{cid} := H(\mathsf{deployerAddr} \parallel \mathsf{tid} \parallel \vec{a})
 \end{equation}
-のように作れる（重要なのは同一入力から一意であること）。これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（R2, R3）。
+のように作れる（重要なのは同一入力から一意であること）。ここで $\mathsf{deployerAddr}$ は CreateSC/Lock を作成する主体（デプロイヤ／作成者）のアドレスである。これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（R2, R3）。
 
 \paragraph{Definition 8（Locked UTXO：型付き状態）}
 Locked UTXO は、単なる script 断片ではなくテンプレート参照と状態タグを伴う型付き状態である、という設計選好を仕様として固定する。
-Locked UTXO を
-\begin{equation}
-	u^\star := (\mathsf{op}, v, \mathsf{lockScript}, \mathsf{cid}, \mathsf{stateTag})
-\end{equation}
-と表す。ここで $u^\star$ の上付き $\star$ は lock 済み状態を示す記号である。
-$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）である。
-\textbf{実装上は、$\mathsf{stateTag}$ も script / witness / commitment / metadata に埋め込む抽象化であり、UTXO に独立の状態欄があることを仮定しない。}
-これにより「Script の中に条件を書く」から、「状態（タグ/メタ）に条件を載せ、テンプレート参照で検証する」へと、監査可能性が上限付きの表現に移る。
+Locked UTXO $u^\star$（Definition 1）において、$\mathsf{cid}$ は参照先インスタンス、$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）である。本稿では $\mathsf{stateTag}$ を共有される唯一のグローバルステートとして扱う。
+実装上の埋め込みは Definition 1 の注記に同じであり、独立の状態欄を仮定しない。
+これにより「条件を script 断片に依存させる」から、「状態タグとテンプレート参照により検証する」へと、監査可能性が上限付きの表現に移る。
 
 \subsection{遷移規則：Create / Lock / Release / Finalize と Admissibility}
 本節では、Locked UTXO を生成・消費する遷移の妥当性を admissibility（許容条件）として定義する。要件は「外部裁量ではなく検証可能」＝決定的 admissibility である（R2）。
 
 \paragraph{Definition 9（Contract Create / Lock）}
 \begin{itemize}
-	\item CreateSC：$\Gamma$ 内のテンプレート $\mathsf{tid}$ と引数 $\vec{a}$ を参照し、$\mathsf{cid}$ を生成するトランザクション。
+	\item CreateSC：$\Gamma$ 内のテンプレート $\mathsf{tid}$ と引数 $\vec{a}$、および $\mathsf{deployerAddr}$ を参照し、$\mathsf{cid}$ を生成するトランザクション。
 	\item Lock：通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。出力には $(\mathsf{cid}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。
 \end{itemize}
 
@@ -122,6 +122,7 @@ Locked UTXO $u^\star$ を入力として消費するトランザクションを 
 	\mathsf{TransSpec}_{\tau,\ell} : \Sigma \times \mathsf{CID} \to \mathcal{P}(\mathsf{Out})
 \end{equation}
 を用いる。ここで $\mathsf{Tx}$ はトランザクション集合、$\mathsf{CID}$ はコントラクト識別子集合、$\mathsf{Out}$ は出力 UTXO 列の集合である。
+$\mathsf{Pred}$ は $\Sigma$ と $tx$ の $\mathsf{in}/\mathsf{out}/\mathsf{aux}$ を参照して決定的に真偽が定まる述語である。
 このとき、次を満たすときに限り $tx$ は admissible とする。
 \begin{enumerate}
 	\item[(i)] 述語の成立：$\mathsf{Pred}_{\tau,\ell}(\Sigma, tx, \mathsf{cid}) = \mathsf{true}$
@@ -157,7 +158,7 @@ Operator が単独で資金を不正流用できる遷移 $F$ が admissible に
 	\item R1：$F$ を admissibility から排除（Authority Safety）
 	\item R2：$\mathsf{Pred}$ と $\mathsf{TransSpec}$ による決定的 admissibility
 	\item R3：テンプレートによる監査上限
-	\item R4：状態は基本的に UTXO（局所状態）。共有は $\Gamma$（不変）に限定
+	\item R4：状態は基本的に UTXO（局所状態）。共有される状態語彙は $\mathsf{stateTag}$ に限定し、参照情報は $\Gamma$（不変）に保持
 \end{itemize}
 
 \subsection{次章への接続（テンプレート具体化）}

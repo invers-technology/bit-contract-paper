@@ -25,11 +25,11 @@ S2: Refund to Buyer（返金）：資金がBuyerへ返還
 	\item 取消およびタイムアウトにより $S0/S0D/S0X \to S2$ が可能。
 \end{itemize}
 
-S0: $p\,\mathrm{UTXO}_A \to p\,\mathrm{UTXO}(\text{script locked})$
-S0D: $p\,\mathrm{UTXO}(\text{script locked}, \mathrm{state}=S0) \to p\,\mathrm{UTXO}(\text{script locked}, \mathrm{state}=S0D)$
-S0X: $p\,\mathrm{UTXO}(\text{script locked}, \mathrm{state}=S0D) \to p\,\mathrm{UTXO}(\text{script locked}, \mathrm{state}=S0X)$
-S1: $p\,\mathrm{UTXO}(\text{script locked}) \to p(1 - m)\,\mathrm{UTXO}_B \text{ and } p \cdot m\,\mathrm{UTXO}_C$
-S2: $p\,\mathrm{UTXO}(\text{script locked}) \to p\,\mathrm{UTXO}_A$
+S0: $p\,\mathrm{UTXO}_A \to p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0)$
+S0D: $p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0) \to p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0D)$
+S0X: $p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0D) \to p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}=S0X)$
+S1: $p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}\in\{S0D,S0X\}) \to p(1 - m)\,\mathrm{UTXO}_B \text{ and } p \cdot m\,\mathrm{UTXO}_C$
+S2: $p\,\mathrm{UTXO}^\star(\mathsf{cid}, \mathsf{stateTag}\in\{S0,S0D,S0X\}) \to p\,\mathrm{UTXO}_A$
 
 \subsection{Template Constructor Arguments}
 マージン率: $m$
@@ -38,7 +38,7 @@ S2: $p\,\mathrm{UTXO}(\text{script locked}) \to p\,\mathrm{UTXO}_A$
 
 \subsection{Template Constructor Arguments}
 $\mathrm{Constructor}(m, d, t)$
-Operatorが変数の初期化とContract Create Transactionの送信を行う
+Operatorが変数の初期化と CreateSC の送信を行い、$\mathsf{deployerAddr}$ として $\mathsf{cid}$ が導出される
 $d$：SellerConfirm後の“検収猶予”
 $t$：全体の最終期限（$t \ge d$ を仮定）
 
@@ -46,8 +46,7 @@ $\mathrm{BuyerLock}(\mathrm{sig}(A), B, p)$
 Buyerが資産をLockし、$S0$が開始
 
 $\mathrm{SellerDeliver}(\mathrm{sig}(B))$
-$S0$からSellerの署名でDeliveredのフラグが立ち$S0D$に移行
-$\mathrm{delivered} := \mathrm{true}$ をオンチェーンで記録し、検収猶予 $d$ のカウントを開始する
+$S0$からSellerの署名で $\mathsf{stateTag}=S0D$ に移行し、検収猶予 $d$ のカウントを開始する
 
 $\mathrm{BuyerConfirm}(\mathrm{sig}(A))$
 Buyerの署名で$S0D \to S1$
@@ -71,13 +70,13 @@ Operator仲裁で$S2$の状態に移行
 
 $\mathrm{ContractFinalize}()$
 誰でも起動可能
-$\mathrm{SellerDeliver}$の後、$d$時間が経過し、$\mathrm{state}=S0D$ のままなら$S0D \to S1$
+$\mathrm{SellerDeliver}$の後、$d$時間が経過し、$\mathsf{stateTag}=S0D$ のままなら$S0D \to S1$
 
 $\mathrm{ContractTimeout}()$
 誰でも起動可能
 $t$の経過でFinal TransitionのBuyerに資金移動し、$S2$
 
-遷移ラベルごとの $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ を表に整理する。表中の不変条件は S=Safety, A=Authority Safety, L=Liveness を表す。取消フラグは Locked UTXO の $\mathsf{data}$ に記録される補助情報である。
+遷移ラベルごとの $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ を表に整理する。表中の不変条件は S=Safety, A=Authority Safety, L=Liveness を表す。取消フラグは Locked UTXO に付随する補助情報として扱い、$(\mathsf{cid}, \mathsf{stateTag})$ と同様に script / aux / commitment / metadata に埋め込まれ得る。
 \begin{table}[htbp]
 	\centering
 	\footnotesize
@@ -87,10 +86,10 @@ $t$の経過でFinal TransitionのBuyerに資金移動し、$S2$
 		\toprule
 		遷移ラベル $\ell$           & 前提状態         & $\mathsf{Pred}_{\tau,\ell}$ が見る要素                            & $\mathsf{TransSpec}_{\tau,\ell}$（出力仕様）         & ブロードキャスト       & 不変条件    \\
 		\midrule
-		BuyerLock              & --           & $\mathrm{sig}(A)$, $p$                                       & $p$ を拘束し、$\mathrm{state}=S0$ の Locked UTXO を生成 & Buyer          & S       \\
-		SellerDeliver          & $S0$         & $\mathrm{sig}(B)$                                            & $\mathrm{state}=S0D$ に更新（ロック継続）                & Seller         & S, L    \\
+		BuyerLock              & --           & $\mathrm{sig}(A)$, $p$                                       & $p$ を拘束し、$\mathsf{stateTag}=S0$ の Locked UTXO を生成 & Buyer          & S       \\
+		SellerDeliver          & $S0$         & $\mathrm{sig}(B)$                                            & $\mathsf{stateTag}=S0D$ に更新（ロック継続）                & Seller         & S, L    \\
 		BuyerConfirm           & $S0D$        & $\mathrm{sig}(A)$                                            & $p(1-m)$ を $B$、$p \cdot m$ を $C$ へ             & Buyer          & S, A, L \\
-		BuyerDispute           & $S0D$        & $\mathrm{sig}(A)$, $\operatorname{before}(d)$                & $\mathrm{state}=S0X$ に更新（ロック継続）                & Buyer          & A, L    \\
+		BuyerDispute           & $S0D$        & $\mathrm{sig}(A)$, $\operatorname{before}(d)$                & $\mathsf{stateTag}=S0X$ に更新（ロック継続）                & Buyer          & A, L    \\
 		BuyerCancel            & $S0/S0D$     & $\mathrm{sig}(A)$                                            & 取消フラグを付与（ロック継続）                                & Buyer          & A       \\
 		SellerAcceptCancel     & $S0/S0D$     & $\mathrm{sig}(B)$, 取消フラグ                                     & $p$ を $A$ に返金（$S2$）                            & Seller         & S, A, L \\
 		OperatorMediateRelease & $S0X$        & $\mathrm{sig}(C)$ と $(\mathrm{sig}(A)$ or $\mathrm{sig}(B))$ & $p(1-m)$ を $B$、$p \cdot m$ を $C$ へ             & Operator + A/B & S, A, L \\
