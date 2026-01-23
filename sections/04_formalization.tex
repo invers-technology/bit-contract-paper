@@ -7,10 +7,11 @@
 
 本章は「一般形式（general form）」までを与え、ユースケース適用は次章でテンプレート群（deposit/release/refund）として具体化する。
 
+\subsection{Notation and Conventions}
+$\parallel$ は連結（concatenation）を表し、$H(\cdot)$ は暗号学的ハッシュ関数を表す。記号の使い分けとして、$\mathsf{index}$ はインクリメントされる自然数の添字（例：outpoint の $i$、テンプレート参照の $\mathsf{t}_{index}$）を指し、$\mathsf{id}$ はハッシュ関数等で導出される識別子（例：$\mathsf{tx}_{id}, \mathsf{c}_{id}$）を指す。$\mathsf{Addr}$ はアドレス集合であり、$\mathsf{addr} \in \mathsf{Addr}$ は P2PKH などの通常アドレスや script-hash 的な識別子を抽象化したものである（実装上は script/commitment/metadata に埋め込める）。
+
 \subsection{UTXO ステートマシン}
 本節は Bitcoin の Script や補助入力構造を忠実に再現しない。UTXO 集合と遷移として抽象化し、テンプレート参照・状態タグ・検証述語・出力仕様に必要な最小要素のみを定義する。署名検証等の基礎規則は抽象述語 $\mathsf{BaseValid}$ にまとめる。
-\paragraph{Notation}
-$\parallel$ は連結（concatenation）を表し、$H(\cdot)$ は暗号学的ハッシュ関数を表す。記号の使い分けとして、$\mathsf{index}$ はインクリメントされる自然数の添字（例：outpoint の $i$、テンプレート参照の $\mathsf{t}_{index}$）を指し、$\mathsf{id}$ はハッシュ関数等で導出される識別子（例：$\mathsf{tx}_{id}, \mathsf{c}_{id}$）を指す。$\mathsf{Addr}$ はアドレス集合であり、$\mathsf{addr} \in \mathsf{Addr}$ は P2PKH などの通常アドレスや script-hash 的な識別子を抽象化したものである（実装上は script/commitment/metadata に埋め込める）。
 \paragraph{Definition 1（UTXO と Outpoint）}
 Outpoint を $\mathsf{op}=(\mathsf{tx}_{id}, i)$ とし、UTXO を次で表す：
 \begin{equation}
