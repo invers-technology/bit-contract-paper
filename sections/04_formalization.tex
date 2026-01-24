@@ -78,12 +78,13 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 \paragraph{Definition 6（Template：普遍）}
 テンプレート $\tau \in \Gamma$ は次の構造を持つ：
 \begin{equation}
-	\tau := (\mathsf{t}_{index}, \mathsf{InitParams}, \mathsf{Logic}, \mathsf{TransSpec})
+	\tau := (\mathsf{t}_{index}, \mathsf{InitParams}, \mathsf{LockParams}, \mathsf{LogicSet}, \mathsf{TransSpec})
 \end{equation}
 \begin{itemize}
 	\item $\mathsf{t}_{index}$：テンプレート index（固定）
 	\item $\mathsf{InitParams}$：初期化引数スロット（型・制約）。CreateSC の Constructor 引数により初期化され、以後は定数として更新されない。
-	\item $\mathsf{Logic}$：検証ロジック（validator）。引数、引数の型、処理（$\mathsf{Pred}$ の実装）の三つから構成される。
+	\item $\mathsf{LockParams}$：ロック引数スロット（型・制約）。Lock 時に与えられる引数を $\mathsf{InitParams}$ 同様に検証するために用いられる。
+	\item $\mathsf{LogicSet}$：検証ロジック（validator）の集合。Key を LogicIndex $\ell$ とし、value は $\mathsf{func}_\ell$ を与える写像であり、$\mathsf{LogicSet}[\ell] = \mathsf{func}_\ell$ と書く。各 $\mathsf{func}_\ell$ は $(\mathsf{args}_\ell, \mathsf{modifier}_\ell, \mathsf{post\_state}_\ell, \mathsf{validation}_\ell)$ から成り、$\mathsf{modifier}_\ell$ は現状態で当該関数を実行可能かを判定し、$\mathsf{validation}_\ell$ は $\mathsf{post\_state}_\ell$ と $\mathsf{args}_\ell$ を検証して遷移の妥当性を確認する。
 	\item $\mathsf{TransSpec}$：状態と生成するトランザクションの形の二つから成る出力仕様
 \end{itemize}
 テンプレートは \textbf{普遍（protocol-level constant）} であり、台帳状態の更新で変化しない（R3, R4）。
@@ -118,7 +119,9 @@ Locked UTXO $u^\star$（Definition 1）において、$\mathsf{c}_{id}$ は参�
 
 \paragraph{Definition 10（Release / Transition）}
 Locked UTXO $u^\star$ を入力として消費するトランザクションを contract transition tx と呼ぶ。
-ここで $\ell$ はテンプレートが定める遷移ラベルである。型注釈として、
+特に Execute は contract transition tx の一種であり、$\mathsf{c}_{id}$ と関数 index（LogicIndex）$\ell$、および引数 $\mathsf{args}$ をフィールドとして持つ（例：$\mathsf{aux}$ 内に格納）。さらに、$\mathsf{c}_{id}$ から対応する Locked UTXO を取得し、$(\ell, \mathsf{args})$ から $\mathsf{modifier}_\ell$ と $\mathsf{validation}_\ell$ を取得して双方の検証を行い、通過した場合に $u^\star$ の $\mathsf{stateTag}$ を更新する。
+つまり、Execute トランザクションは Locked UTXO の状態遷移を命令するものであり、テンプレートはその検証機として働く。
+ここで $\ell$ はテンプレートが定める LogicIndex（遷移ラベル）である。型注釈として、
 \begin{equation}
 	\mathsf{Pred}_{\tau,\ell} : \Sigma \times \mathsf{Tx} \times \mathsf{CID} \to \{\mathsf{true}, \mathsf{false}\}
 \end{equation}

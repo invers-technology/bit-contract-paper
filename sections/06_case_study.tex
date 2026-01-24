@@ -9,14 +9,14 @@
 	\renewcommand{\arraystretch}{1.1}
 	\begin{tabular}{ll}
 		\toprule
-		Buyerアドレス & $\Buyer$ \\
-		Sellerアドレス & $\Seller$ \\
-		Operatorアドレス & $\Oper$ \\
-		商品価格 & $p$ \\
-		マージン率 & $m$ \\
-		配送期間 & $d$ \\
-		コントラクトタイムアウト（$t\ge d$） & $t$ \\
-		Finalize報酬率（$0 \le b < 1$） & $b$ \\
+		Buyerアドレス                  & $\Buyer$  \\
+		Sellerアドレス                 & $\Seller$ \\
+		Operatorアドレス               & $\Oper$   \\
+		商品価格                       & $p$       \\
+		マージン率                      & $m$       \\
+		配送期間                       & $d$       \\
+		コントラクトタイムアウト（$t\ge d$）     & $t$       \\
+		Finalize報酬率（$0 \le b < 1$） & $b$       \\
 		\bottomrule
 	\end{tabular}
 \end{table}
@@ -66,25 +66,25 @@ Operatorが $\mathsf{InitParams}$ の設定と CreateSC の送信を行い、$\m
 
 \begin{itemize}
 	\item $\BuyerLock(\sigA, \Seller, p)$.
-	Buyerが資産をLockし、$\Szero$が開始
+	      Buyerが資産をLockし、$\Szero$が開始
 	\item $\SellerDeliver(\sigB)$.
-	$\Szero$からSellerの署名で $\stag=\SzD$ に移行し、検収猶予 $d$ のカウントを開始する
+	      $\Szero$からSellerの署名で $\stag=\SzD$ に移行し、検収猶予 $d$ のカウントを開始する
 	\item $\BuyerConfirm(\sigA)$.
-	Buyerの署名で$\SzD \to \Sone$
+	      Buyerの署名で$\SzD \to \Sone$
 	\item $\BuyerDispute(\sigA)$.
-	$\before(d)$ のみ有効。Buyerの署名で異議申し立てで$\SzD \to \SzX$
+	      $\before(d)$ のみ有効。Buyerの署名で異議申し立てで$\SzD \to \SzX$
 	\item $\BuyerCancel(\sigA)$.
-	$\Szero$または$\SzD$からのみ。Buyerの署名でSellerのキャンセル待ち
+	      $\Szero$または$\SzD$からのみ。Buyerの署名でSellerのキャンセル待ち
 	\item $\SellerAcceptCancel(\sigB)$.
-	$\Szero$または$\SzD$からBuyerCancel後、Sellerの署名で$\Stwo$に移行
+	      $\Szero$または$\SzD$からBuyerCancel後、Sellerの署名で$\Stwo$に移行
 	\item $\OpRel(\sigC + (\sigA \text{ or } \sigB))$.
-	Operator仲裁で$\Sone$の状態に移行
+	      Operator仲裁で$\Sone$の状態に移行
 	\item $\OpRef(\sigC + (\sigA \text{ or } \sigB))$.
-	Operator仲裁で$\Stwo$の状態に移行
+	      Operator仲裁で$\Stwo$の状態に移行
 	\item $\Finalize()$.
-	誰でも起動可能。実行者は受取先アドレス $X$ を出力に含めて bounty を受け取る（$\mathsf{Pred}$ は $\mathsf{out}(tx)$ の $X$ を参照、署名不要）。$\SellerDeliver$ の後、$d$時間が経過し、$\stag=\SzD$ のままなら$\SzD \to \Sone$
+	      誰でも起動可能。実行者は受取先アドレス $X$ を出力に含めて bounty を受け取る（$\mathsf{Pred}$ は $\mathsf{out}(tx)$ の $X$ を参照、署名不要）。$\SellerDeliver$ の後、$d$時間が経過し、$\stag=\SzD$ のままなら$\SzD \to \Sone$
 	\item $\Timeout()$.
-	誰でも起動可能。$t$の経過で$\Timeout$ 遷移が起動し、Buyerに資金移動し、$\Stwo$
+	      誰でも起動可能。$t$の経過で$\Timeout$ 遷移が起動し、Buyerに資金移動し、$\Stwo$
 \end{itemize}
 
 遷移ラベルごとの $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ を表に整理する。表中の不変条件は S=Safety, A=Authority Safety, L=Liveness を表す。取消フラグは Locked UTXO に付随する補助情報として扱い、$(\cid, \stag)$ と同様に script / aux / commitment / metadata に埋め込まれ得る。
@@ -95,18 +95,18 @@ Operatorが $\mathsf{InitParams}$ の設定と CreateSC の送信を行い、$\m
 	\renewcommand{\arraystretch}{1.15}
 	\begin{tabular}{p{0.14\textwidth}p{0.08\textwidth}p{0.19\textwidth}p{0.23\textwidth}p{0.12\textwidth}p{0.12\textwidth}}
 		\toprule
-		遷移ラベル $\ell$           & 前提状態         & $\mathsf{Pred}_{\tau,\ell}$ が見る要素                            & $\mathsf{TransSpec}_{\tau,\ell}$（出力仕様）            & ブロードキャスト           & 不変条件    \\
+		遷移ラベル $\ell$          & 前提状態               & $\mathsf{Pred}_{\tau,\ell}$ が見る要素     & $\mathsf{TransSpec}_{\tau,\ell}$（出力仕様）                               & ブロードキャスト                   & 不変条件    \\
 		\midrule
-		$\BuyerLock$          & --           & $\sigA$, $p$                                       & $p$ を拘束し、$\Lu{\Szero}$ を生成                & $\Buyer$                & S       \\
-		$\SellerDeliver$      & $\Szero$     & $\sigB$                                             & $\stag=\SzD$ に更新（ロック継続）                & $\Seller$               & S, L    \\
-		$\BuyerConfirm$       & $\SzD$       & $\sigA$                                             & $\pmarg{p}{m}$ を $\Seller$、$\pfee{p}{m}$ を $\Oper$ へ        & $\Buyer$                & S, A, L \\
-		$\BuyerDispute$       & $\SzD$       & $\sigA$, $\before(d)$                              & $\stag=\SzX$ に更新（ロック継続）                & $\Buyer$                & A, L    \\
-		$\BuyerCancel$        & $\Szero/\SzD$ & $\sigA$                                             & 取消フラグを付与（ロック継続）                       & $\Buyer$                & A       \\
-		$\SellerAcceptCancel$ & $\Szero/\SzD$ & $\sigB$, 取消フラグ                                  & $p$ を $\Buyer$ に返金（$\Stwo$）                   & $\Seller$               & S, A, L \\
-		$\OpRel$              & $\SzX$       & $\sigC$ と $(\sigA \text{ or } \sigB)$             & $\pmarg{p}{m}$ を $\Seller$、$\pfee{p}{m}$ を $\Oper$ へ        & $\Oper + (\Buyer/\Seller)$ & S, A, L \\
-		$\OpRef$              & $\SzX$       & $\sigC$ と $(\sigA \text{ or } \sigB)$             & $p$ を $\Buyer$ に返金（$\Stwo$）                   & $\Oper + (\Buyer/\Seller)$ & S, A, L \\
-		$\Finalize$           & $\SzD$       & $\after(d)$, 受取先 $X$                              & $p(1-m-b)$ を $\Seller$、$\pfee{p}{m}$ を $\Oper$、$\pfee{p}{b}$ を $X$ へ & Anyone                   & S, L    \\
-		$\Timeout$            & $\Szero/\SzD/\SzX$ & $\after(t)$                                   & $p$ を $\Buyer$ に返金（$\Stwo$）                   & Anyone                   & S, L    \\
+		$\BuyerLock$          & --                 & $\sigA$, $p$                          & $p$ を拘束し、$\Lu{\Szero}$ を生成                                           & $\Buyer$                   & S       \\
+		$\SellerDeliver$      & $\Szero$           & $\sigB$                               & $\stag=\SzD$ に更新（ロック継続）                                              & $\Seller$                  & S, L    \\
+		$\BuyerConfirm$       & $\SzD$             & $\sigA$                               & $\pmarg{p}{m}$ を $\Seller$、$\pfee{p}{m}$ を $\Oper$ へ                 & $\Buyer$                   & S, A, L \\
+		$\BuyerDispute$       & $\SzD$             & $\sigA$, $\before(d)$                 & $\stag=\SzX$ に更新（ロック継続）                                              & $\Buyer$                   & A, L    \\
+		$\BuyerCancel$        & $\Szero/\SzD$      & $\sigA$                               & 取消フラグを付与（ロック継続）                                                      & $\Buyer$                   & A       \\
+		$\SellerAcceptCancel$ & $\Szero/\SzD$      & $\sigB$, 取消フラグ                        & $p$ を $\Buyer$ に返金（$\Stwo$）                                          & $\Seller$                  & S, A, L \\
+		$\OpRel$              & $\SzX$             & $\sigC$ と $(\sigA \text{ or } \sigB)$ & $\pmarg{p}{m}$ を $\Seller$、$\pfee{p}{m}$ を $\Oper$ へ                 & $\Oper + (\Buyer/\Seller)$ & S, A, L \\
+		$\OpRef$              & $\SzX$             & $\sigC$ と $(\sigA \text{ or } \sigB)$ & $p$ を $\Buyer$ に返金（$\Stwo$）                                          & $\Oper + (\Buyer/\Seller)$ & S, A, L \\
+		$\Finalize$           & $\SzD$             & $\after(d)$, 受取先 $X$                  & $p(1-m-b)$ を $\Seller$、$\pfee{p}{m}$ を $\Oper$、$\pfee{p}{b}$ を $X$ へ & Anyone                     & S, L    \\
+		$\Timeout$            & $\Szero/\SzD/\SzX$ & $\after(t)$                           & $p$ を $\Buyer$ に返金（$\Stwo$）                                          & Anyone                     & S, L    \\
 		\bottomrule
 	\end{tabular}
 \end{table}

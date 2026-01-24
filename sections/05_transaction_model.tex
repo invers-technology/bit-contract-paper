@@ -2,7 +2,7 @@
 本章では、UTXOを用いたスマートコントラクトの実現に関するトランザクションを論じる。
 4章で与えたテンプレート／インスタンス／Locked UTXO および admissibility の定義を前提に、トランザクションの型（classes）として作成・実行・確定の流れを整理する。
 本章で扱うトランザクションは、Contract Creation（CreateSC）、Contract Lock（Lock）、Contract Execution（$tx_\ell$）、Contract Finalize（$tx_{\ell_{\mathrm{final}}}$）の4種類である。
-トランザクションの一般形は第4章（Formalization）の $tx=(\mathsf{in}, \mathsf{out}, \mathsf{aux})$ に従う。以降は各“型”ごとに、$\mathsf{out}/\mathsf{aux}$ に課す追加制約（marker、含めるパラメータ、$\mathsf{c}_{id}$ 導出など）のみを列挙する。
+トランザクションの一般形は第4章（Formalization）の Definition 3 に従う。以降は各“型”ごとに、Definition 3 の $\mathsf{out}/\mathsf{aux}$ に課す追加制約（marker、含めるパラメータ、$\mathsf{c}_{id}$ 導出など）のみを列挙する。
 本章の各遷移 $\ell$ は、Locked UTXO（stateTag付き）を入力に取り、$\mathsf{TransSpec}$ が指定する (i) 次の Locked UTXO への更新 または (ii) 解放（S1/S2）の出力 を生成する“トランザクション型”である。
 
 \subsection{Creation}
