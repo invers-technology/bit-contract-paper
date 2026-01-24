@@ -1,12 +1,12 @@
 \section{Case Study: Escrow Misappropriation Resistance}
-本ケーススタディは匿名市場に関する先行研究を組み合わせて構成している（\cite{Christin2013,Soska2015,Tzanetakis2016,Spagnoletti2022}）。
+本章ではマーケットプレイス型のエスクロー取引を想定し、買い手・販売者・プラットフォーマの三者モデルでケーススタディを行う。買い手アドレスを $\Buyer$、販売者アドレスを $\Seller$、仲介者／プラットフォーマのアドレスを $\Oper$ とし、買い手が価格 $p$ の商品購入を試み、プラットフォーマはマージン率 $m$ を設定する。本ケーススタディは匿名市場に関する先行研究を組み合わせて構成している（\cite{Christin2013,Soska2015,Tzanetakis2016,Spagnoletti2022}）。
+以降で用いる記号は次のとおりである。
 
-\subsection{Variables}
 \begin{table}[htbp]
-	\centering
 	\small
 	\setlength{\tabcolsep}{6pt}
 	\renewcommand{\arraystretch}{1.1}
+	\raggedright
 	\begin{tabular}{ll}
 		\toprule
 		Buyerアドレス                  & $\Buyer$  \\
@@ -16,57 +16,66 @@
 		マージン率                      & $m$       \\
 		配送期間                       & $d$       \\
 		コントラクトタイムアウト（$t\ge d$）     & $t$       \\
-		Finalize報酬率（$0 \le b < 1$） & $b$       \\
+		FinalizeContract報酬率（$0 \le b < 1$） & $b$       \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-\subsection{Template State Transition}
-\begin{itemize}
-	\item $\Szero$: Funded escrow（資金拘束）：Buyerが資金をエスクローとして拘束
-	\item $\SzD$: Delivered pending（配送通知済み・検収猶予中）：Sellerが発送の完了を通知
-	\item $\SzX$: Disputed（紛争中：タイムアウトor仲裁のみ）：Buyerが発送の完了を認めず紛争
-	\item $\Sone$: Release to Seller（支払）：資金がSellerへ解放
-	\item $\Stwo$: Refund to Buyer（返金）：資金がBuyerへ返還
-\end{itemize}
-
-遷移の全体像は次のように要約できる。
-\begin{itemize}
-	\item $\BuyerLock$ で資金を拘束し $\Szero$ を開始。
-	\item $\Szero \to \SzD$（$\SellerDeliver$）、$\SzD \to \Sone$（$\BuyerConfirm$ または $\after(d)$）。
-	\item $\SzD \to \SzX$（$\BuyerDispute$）、$\SzX \to \Sone/\Stwo$（仲裁）。
-	\item 取消およびタイムアウトにより $\Szero/\SzD/\SzX \to \Stwo$ が可能。
-\end{itemize}
-
-\begin{transitions}
-	\tr{\Szero}{p\,\uA}{\to p\,\Lu{\Szero}}
-	\tr{\SzD}{p\,\Lu{\Szero}}{\to p\,\Lu{\SzD}}
-	\tr{\SzX}{p\,\Lu{\SzD}}{\to p\,\Lu{\SzX}}
-	\tr{\Sone}{p\,\LUTXO(\cid,\stag\in\{\SzD,\SzX\})}{\to p(1-m-b)\,\uB\ \text{and}\ \pfee{p}{m}\,\uC\ \text{and}\ \pfee{p}{b}\,\UTXO_{X}}
-	\tr{\Stwo}{p\,\LUTXO(\cid,\stag\in\{\Szero,\SzD,\SzX\})}{\to p\,\uA}
-\end{transitions}
-
 \subsection{Template InitParams}
+本節では $\mathsf{InitParams}$ の内容を解説する。これらのパラメータは、Operatorである $\Oper$ が CreateContract トランザクションを送信して実行する際に型検証に用いられ、テンプレート側でも参照される。
 \begin{itemize}
 	\item $\mathsf{InitParams}=(m, d, t, b)$
 	\item マージン率: $m$
 	\item 配送期間：$d$
 	\item コントラクトタイムアウト: $t$
-	\item Finalize報酬率: $b$
+	\item FinalizeContract報酬率: $b$
 \end{itemize}
-$b$ はテンプレート固定（CreateSC で確定）であり、$0 \le b \le 1-m$ を仮定する。
+$b$ はテンプレート固定（CreateContract で確定）であり、$0 \le b \le 1-m$ を仮定する。
+Oper が $\mathsf{InitParams}$ の設定と CreateContract の送信を行い、$\mathsf{addr}_{\mathrm{deployer}}$ として $\cid$ が導出される。
 
-\subsection{Transition Labels}
-Operatorが $\mathsf{InitParams}$ の設定と CreateSC の送信を行い、$\mathsf{deployerAddr}$ として $\cid$ が導出される
-
+\subsection{Template Lock Params}
+本節では $\mathsf{LockParams}$ の内容を解説する。これらのパラメータは、Buyerである $\Buyer$ が LockUtxo トランザクションを送信してロックを開始する際に与えられ、型検証とテンプレート側の検証ロジックにより参照され、実行の妥当性に関与する。
 \begin{itemize}
-	\item $d$：SellerConfirm後の“検収猶予”
-	\item $t$：全体の最終期限（$t \ge d$ を仮定）
+	\item $\mathsf{LockParams}=(\Seller, p)$
+	\item $\BuyerLock$ で販売者アドレス $\Seller$ と価格 $p$ を指定して資金を拘束する
 \end{itemize}
 
+\subsection{Template State and Transition}
+本節ではテンプレートが取りうる状態集合（$\mathsf{StateSet}$）とその遷移を説明する。
+以下に Escrow のテンプレートが取りうる状態の一覧を示す。
 \begin{itemize}
-	\item $\BuyerLock(\sigA, \Seller, p)$.
-	      Buyerが資産をLockし、$\Szero$が開始
+	\item $\Szero$: Funded escrow：Buyerが資金をエスクローとして拘束
+	\item $\SzD$: Delivered pending：Sellerが発送の完了を通知
+	\item $\SzX$: Disputed：Buyerが発送の完了を認めず紛争
+	\item $\Sone$: Release to Seller：資金がSellerへ解放
+	\item $\Stwo$: Refund to Buyer：資金がBuyerへ返還
+\end{itemize}
+上記の State は以下のように遷移する（括弧内に起動者を示す）。
+\begin{itemize}
+	\item $\BuyerLock$ で資金を拘束し $\Szero$ を開始（起動者：Buyer）。
+	\item $\Szero \to \SzD$（$\SellerDeliver$、起動者：Seller）、$\SzD \to \Sone$（$\BuyerConfirm$、起動者：Buyer、または $\after(d)$ による $\Finalize$、起動者：Anyone）。
+	\item $\SzD \to \SzX$（$\BuyerDispute$、起動者：Buyer）、$\SzX \to \Sone/\Stwo$（$\OpRel/\OpRef$、起動者：Operator + Buyer/Seller）。
+	\item 取消およびタイムアウトにより $\Szero/\SzD/\SzX \to \Stwo$ が可能（$\BuyerCancel$ と $\SellerAcceptCancel$ は Buyer/Seller、$\Timeout$ は Anyone）。
+\end{itemize}
+
+\begin{center}
+	\small
+	\begin{tabular}{l}
+		Buyer $\rightarrow$ Escrow: LockUtxo $p$, state $\Szero$ \\
+		Seller $\rightarrow$ Escrow: Deliver, state $\SzD$ \\
+		Buyer/Operator/Anyone $\rightarrow$ Escrow: Confirm/OpRel/Finalize, state $\Sone$ \\
+		Escrow $\rightarrow$ Seller: $p(1-m-b)$ \\
+		Escrow $\rightarrow$ Operator: $p m$ \\
+		Escrow $\rightarrow$ $X$: $p b$ \\
+		Buyer/Operator/Anyone $\rightarrow$ Escrow: Cancel/OpRef/Timeout, state $\Stwo$ \\
+		Escrow $\rightarrow$ Buyer: $p$
+	\end{tabular}
+\end{center}
+
+\subsection{Template Logics}
+本節では第4章の定義に従い、テンプレートの $\mathsf{LogicSet}$ と各 $\mathsf{func}_\ell=(\mathsf{args}_\ell, \mathsf{modifier}_\ell, \mathsf{post\_state}_\ell, \mathsf{validation}_\ell)$ の内容を記述する。
+Template Logics（$\mathsf{LogicSet}$）は遷移ラベルと対応する検証ロジックから成り、次の遷移を定義する。
+\begin{itemize}
 	\item $\SellerDeliver(\sigB)$.
 	      $\Szero$からSellerの署名で $\stag=\SzD$ に移行し、検収猶予 $d$ のカウントを開始する
 	\item $\BuyerConfirm(\sigA)$.
@@ -95,7 +104,7 @@ Operatorが $\mathsf{InitParams}$ の設定と CreateSC の送信を行い、$\m
 	\renewcommand{\arraystretch}{1.15}
 	\begin{tabular}{p{0.14\textwidth}p{0.08\textwidth}p{0.19\textwidth}p{0.23\textwidth}p{0.12\textwidth}p{0.12\textwidth}}
 		\toprule
-		遷移ラベル $\ell$          & 前提状態               & $\mathsf{Pred}_{\tau,\ell}$ が見る要素     & $\mathsf{TransSpec}_{\tau,\ell}$（出力仕様）                               & ブロードキャスト                   & 不変条件    \\
+		遷移ラベル $\ell$          & 前提状態               & $\mathsf{Pred}_{\tau,\ell}$ が見る要素     & $\mathsf{TransSpec}_{\tau,\ell}$：出力仕様                               & ブロードキャスト                   & 不変条件    \\
 		\midrule
 		$\BuyerLock$          & --                 & $\sigA$, $p$                          & $p$ を拘束し、$\Lu{\Szero}$ を生成                                           & $\Buyer$                   & S       \\
 		$\SellerDeliver$      & $\Szero$           & $\sigB$                               & $\stag=\SzD$ に更新（ロック継続）                                              & $\Seller$                  & S, L    \\
@@ -111,12 +120,15 @@ Operatorが $\mathsf{InitParams}$ の設定と CreateSC の送信を行い、$\m
 	\end{tabular}
 \end{table}
 
+\subsection{Template Finalization}
+Finalization は期限条件により確定させる遷移であり、$\Finalize$ と $\Timeout$ を含む。いずれも誰でも起動可能で、$\after(d)$ により $\SzD \to \Sone$ を確定し、$\after(t)$ により $\Szero/\SzD/\SzX \to \Stwo$ を確定する。
+
 \subsection{Property}
-Safety（運営の持ち逃げ抑止）
+Safety：運営の持ち逃げ抑止
 $\Oper$は単独で$\Sone/\Stwo$を実行できず、資金移動には $(\Oper + (\Buyer \text{ or } \Seller))$ が必要（または自動遷移）。
 ⇒ $\Oper$単独のmisappropriation（$F$）を制度的に排除。
 
-Liveness（決着性）
+Liveness：決着性
 $\SzD$は$\BuyerConfirm$か$\after(d)$の$\Finalize$で$\Sone$へ、
 $\SzX$は仲裁（$\Oper + (\Buyer \text{ or } \Seller)$）か、最終的に$\after(t)$の$\Timeout$で$\Stwo$へ。
 また、$\Finalize$ は誰でも実行可能で bounty があるため、期限到来後に実行されやすい。

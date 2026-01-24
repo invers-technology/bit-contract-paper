@@ -1,32 +1,39 @@
+o
 \section{Transaction Model}
 本章では、UTXOを用いたスマートコントラクトの実現に関するトランザクションを論じる。
 4章で与えたテンプレート／インスタンス／Locked UTXO および admissibility の定義を前提に、トランザクションの型（classes）として作成・実行・確定の流れを整理する。
-本章で扱うトランザクションは、Contract Creation（CreateSC）、Contract Lock（Lock）、Contract Execution（$tx_\ell$）、Contract Finalize（$tx_{\ell_{\mathrm{final}}}$）の4種類である。
+本章で扱うトランザクションは、CreateContract、LockUtxo、ExecuteContract（$tx_\ell$）、FinalizeContract（$tx_{\ell_{\mathrm{final}}}$）の4種類である。
 トランザクションの一般形は第4章（Formalization）の Definition 3 に従う。以降は各“型”ごとに、Definition 3 の $\mathsf{out}/\mathsf{aux}$ に課す追加制約（marker、含めるパラメータ、$\mathsf{c}_{id}$ 導出など）のみを列挙する。
-本章の各遷移 $\ell$ は、Locked UTXO（stateTag付き）を入力に取り、$\mathsf{TransSpec}$ が指定する (i) 次の Locked UTXO への更新 または (ii) 解放（S1/S2）の出力 を生成する“トランザクション型”である。
+本章の各遷移 $\ell$ は、stateTag付きの Locked UTXO を入力に取り、$\mathsf{TransSpec}$ が指定する (i) 次の Locked UTXO への更新 または (ii) 解放（S1/S2）の出力 を生成する“トランザクション型”である。
+以降の具体化では、Escrow のテンプレート index を $\mathsf{t}_{index}=1$ と固定する。以下の表記は本章のトランザクションモデルに従う。
+\begin{enumerate}
+	\item オペレーターが自らのアドレス $\Oper$ とパーセンテージのマージン率 $m$ を含めた CreateContract Transaction を送信する。
+	\item バイヤーが購入する商品の価格 $p$ と販売者のアドレス $\Seller$ を含めた LockUtxo Transaction を送信する。
+	\item 2 で参照した $\mathsf{c}_{id}$ に対して ExecuteContract Transaction（$tx_\ell$）を送信し、処理を行う。
+\end{enumerate}
 
 \subsection{Creation}
-Definition 9 の CreateSC に対応する。CreateSC は $\mathsf{out}$ に $\mathsf{to}=0x0$ の出力（marker/burn）を含み、$\mathsf{aux}$ に $\mathsf{t}_{index}$ と $\mathsf{InitParams}$ を含む。さらに
+Definition 9 の CreateContract に対応する。CreateContract は $\mathsf{out}$ に $\mathsf{to}=0x0$ の出力（marker/burn）を含み、$\mathsf{aux}$ に $\mathsf{t}_{index}$ と $\mathsf{InitParams}$ を含む。さらに
 \begin{equation}
 	\mathsf{TypeCheck}(\mathsf{InitParams}, \mathsf{ArgSchema}[\mathsf{t}_{index}])=\mathsf{true}
 \end{equation}
 を満たし、$\mathsf{c}_{id}$ は
 \begin{equation}
-	\mathsf{c}_{id} := H(\mathsf{deployerAddr} \parallel \mathsf{t}_{index} \parallel \mathsf{InitParams})
+	\mathsf{c}_{id} := H(\mathsf{addr}_{\mathrm{deployer}} \parallel \mathsf{t}_{index} \parallel \mathsf{InitParams})
 \end{equation}
 により決定的に導出される。ここで $\mathsf{ArgSchema}[\mathsf{t}_{index}]$ はテンプレートの Constructor 引数スキーマである。
 
-\subsection{Lock}
-Definition 9 の Lock に対応する。通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。
+\subsection{LockUtxo}
+Definition 9 の LockUtxo に対応する。通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。
 出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。
-CreateSC と Lock は実装上同一Txに畳めるが、概念上は分離して記述する。
+CreateContract と LockUtxo は実装上同一Txに畳めるが、概念上は分離して記述する。
 
-\subsection{Execution}
-Locked UTXO $u^\star$ を入力として消費するトランザクション $tx_\ell$（$\ell$ は遷移ラベル）を指す。
+\subsection{ExecuteContract}
+Locked UTXO $u^\star$ を入力として消費するトランザクション ExecuteContract $tx_\ell$ を指す。ここで $\ell$ は遷移ラベルである。
 admissible 判定は第4章の $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ に従う。
 
-継続遷移であれば $\mathsf{out}(tx)$ は次状態の $u^{\star\prime}(\dots,\mathsf{c}_{id}, \mathsf{stateTag}=s')$ を含み、終端遷移であれば受益者への通常 UTXO（およびお釣り等）のみを含む。
+継続遷移であれば $\mathsf{out}(tx)$ は次状態の $u^{\star\prime}(\dots,\mathsf{c}_{id}, \mathsf{stateTag}=s')$ を含み、終端遷移であれば受益者への通常 UTXO とお釣り等のみを含む。
 
-\subsection{Finalize}
-Definition 11 で導入した確定遷移に対応する。
+\subsection{FinalizeContract}
+Definition 11 で導入した確定遷移 FinalizeContract に対応する。
 期限経過 $\operatorname{after}(d)$ や $\operatorname{after}(t)$ に対応する遷移ラベル $\ell_{\mathrm{final}}$ を与え、admissibility と同じ枠組みで検証可能にする。

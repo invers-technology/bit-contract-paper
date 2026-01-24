@@ -1,9 +1,9 @@
 \section{Formalization}
 本章の目的は、Bitcoin を UTXO 集合を状態、トランザクションを遷移とするステートマシンとして再定式化し、その上でスマートコントラクトを (1) 資産の拘束（lock）(2) 解放条件（unlock predicate）(3) 条件成立時に許される出力（prescribed transition / template）として形式的に定義することである。
 
-本稿は 汎用 VM による任意計算と広範な mutable global state（共有可変ストレージ）を採用しない。
+本稿は 汎用 VM による任意計算と広範な mutable global state、すなわち共有可変ストレージを採用しない。
 代わりに、コントラクトは テンプレート（template）として事前に制約され、インスタンス化はテンプレート参照と引数によって与えられる。
-共有される状態は $\mathsf{stateTag}$ に限定し、テンプレートが定める有限ラベルとしてグローバルに解釈される唯一の状態語彙とする。必要であればテンプレート集合や参照情報は immutable global registry（不変レジストリ）として保持し得る（R4 に整合）。
+共有される状態は $\mathsf{stateTag}$ に限定し、テンプレートが定める有限ラベルとしてグローバルに解釈される唯一の状態語彙とする。必要であればテンプレート集合や参照情報は immutable global registryとして保持し得る。これは不変レジストリであり、R4 に整合する。
 
 本章は「一般形式（general form）」までを与え、ユースケース適用は次章でテンプレート群（deposit/release/refund）として具体化する。
 
@@ -12,7 +12,7 @@ $\parallel$ は連結（concatenation）を表し、$H(\cdot)$ は暗号学的�
 
 \subsection{UTXO ステートマシン}
 本節は Bitcoin の Script や補助入力構造を忠実に再現しない。UTXO 集合と遷移として抽象化し、テンプレート参照・状態タグ・検証述語・出力仕様に必要な最小要素のみを定義する。署名検証等の基礎規則は抽象述語 $\mathsf{BaseValid}$ にまとめる。
-\paragraph{Definition 1（UTXO と Outpoint）}
+\paragraph{Definition 1：UTXO と Outpoint}
 Outpoint を $\mathsf{op}=(\mathsf{tx}_{id}, i)$ とし、UTXO を次で表す：
 \begin{equation}
 	u=(\mathsf{op}, v, \mathsf{addr})
@@ -24,21 +24,21 @@ Outpoint を $\mathsf{op}=(\mathsf{tx}_{id}, i)$ とし、UTXO を次で表す�
 \textbf{実装上は、$(\mathsf{c}_{id}, \mathsf{stateTag})$ は script / aux / commitment / metadata に埋め込まれ得る抽象化であり、UTXO に独立の data 欄があることを仮定しない。$\mathsf{addr}$ についても同様に埋め込み可能である。}
 （Bitcoin Script 相当では $(\mathsf{c}_{id}, \mathsf{stateTag})$ を script/commitment/metadata として埋め込める。eUTXO では datum として扱える。）
 
-\paragraph{Definition 2（台帳状態）}
+\paragraph{Definition 2：台帳状態}
 台帳状態を
 \begin{equation}
 	\Sigma := (U, \Gamma)
 \end{equation}
 とする。$U$ は未消費 UTXO の集合、$\Gamma$ はテンプレート集合（および必要な参照情報）から成る不変レジストリである（R4）。
 
-\paragraph{Definition 3（トランザクション）}
+\paragraph{Definition 3：トランザクション}
 トランザクション $tx$ を
 \begin{equation}
 	tx := (\mathsf{in}, \mathsf{out}, \mathsf{aux})
 \end{equation}
 とする。$\mathsf{in}$ は入力 outpoint 列 $\mathsf{in}:=[\mathsf{op}_j]$、$\mathsf{out}$ は出力 UTXO 列、$\mathsf{aux}$ は署名・期限情報など検証に必要な補助入力である。Bitcoinと同様に、本稿のトランザクションは from/to アドレスを明示的なフィールドとして含まない。
 
-\paragraph{Definition 4（基礎検証：UTXO 妥当性）}
+\paragraph{Definition 4：基礎検証：UTXO 妥当性}
 $tx$ が $\Sigma$ 上で基礎的に妥当であるとは、$\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たすことをいう。
 $\mathsf{BaseValid}$ は入力参照の健全性・二重消費排除・署名等による消費権限検証・価値保存/手数料規則を含む抽象述語であり、例えば次を含む。
 \begin{enumerate}
@@ -58,16 +58,16 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 \end{equation}
 として $\Sigma' := (U', \Gamma')$ を得る。
 
-\subsection{スマートコントラクトの抽象定義：Lock / Predicate / Prescribed Transition}
+\subsection{スマートコントラクトの抽象定義：LockUtxo / Predicate / Prescribed Transition}
 本稿は、スマートコントラクトを「汎用プログラム」ではなく、条件付き資産移転として抽象化する。
 
-\paragraph{Definition 5（テンプレート型コントラクト）}
+\paragraph{Definition 5：テンプレート型コントラクト}
 テンプレート型スマートコントラクトを次の 3 つ組として定義する：
 \begin{equation}
-	C := (\mathsf{Lock}, \mathsf{Pred}, \mathsf{Trans})
+	C := (\mathsf{LockUtxo}, \mathsf{Pred}, \mathsf{Trans})
 \end{equation}
 \begin{itemize}
-	\item $\mathsf{Lock}$：資産を拘束する操作（どの形の UTXO を Locked 状態にするか）
+	\item $\mathsf{LockUtxo}$：資産を拘束する操作（どの形の UTXO を Locked 状態にするか）
 	\item $\mathsf{Pred}$：解放条件（unlock predicate）。外部裁量ではなく検証可能な述語である（R2）。
 	\item $\mathsf{Trans}$：条件成立時に許される出力形（prescribed transition / template）。出力が任意ではなく、テンプレートで上限付きに規定される（R3）。
 \end{itemize}
@@ -75,53 +75,58 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 \subsection{オンチェーン対象：Template / Contract Instance / Locked UTXO}
 本稿の対象を、“状態として何が増えるか”が明確になるように、次の 3 層に整理する。
 
-\paragraph{Definition 6（Template：普遍）}
+\paragraph{Definition 6：Template：普遍}
 テンプレート $\tau \in \Gamma$ は次の構造を持つ：
 \begin{equation}
-	\tau := (\mathsf{t}_{index}, \mathsf{InitParams}, \mathsf{LockParams}, \mathsf{LogicSet}, \mathsf{TransSpec})
+	\tau := (\mathsf{t}_{index}, \mathsf{InitParams}, \mathsf{LockParams}, \mathsf{StateSet}, \mathsf{LogicSet}, \mathsf{TransSpec})
 \end{equation}
 \begin{itemize}
-	\item $\mathsf{t}_{index}$：テンプレート index（固定）
-	\item $\mathsf{InitParams}$：初期化引数スロット（型・制約）。CreateSC の Constructor 引数により初期化され、以後は定数として更新されない。
-	\item $\mathsf{LockParams}$：ロック引数スロット（型・制約）。Lock 時に与えられる引数を $\mathsf{InitParams}$ 同様に検証するために用いられる。
-	\item $\mathsf{LogicSet}$：検証ロジック（validator）の集合。Key を LogicIndex $\ell$ とし、value は $\mathsf{func}_\ell$ を与える写像であり、$\mathsf{LogicSet}[\ell] = \mathsf{func}_\ell$ と書く。各 $\mathsf{func}_\ell$ は $(\mathsf{args}_\ell, \mathsf{modifier}_\ell, \mathsf{post\_state}_\ell, \mathsf{validation}_\ell)$ から成り、$\mathsf{modifier}_\ell$ は現状態で当該関数を実行可能かを判定し、$\mathsf{validation}_\ell$ は $\mathsf{post\_state}_\ell$ と $\mathsf{args}_\ell$ を検証して遷移の妥当性を確認する。
+	\item $\mathsf{t}_{index}$：テンプレート index は固定
+	\item $\mathsf{InitParams}$：初期化引数スロット（型・制約）。
+	CreateContract の Constructor 引数により初期化され、以後は定数として更新されない。
+	\item $\mathsf{LockParams}$：ロック引数スロット（型・制約）。
+	LockUtxo 時に与えられる引数を $\mathsf{InitParams}$ 同様に検証するために用いられる。
+	\item $\mathsf{StateSet}$：テンプレートが取りうる有限の状態ラベル集合。
+	$s_{\mathrm{init}} \in \mathsf{StateSet}$ を初期状態とする。
+	\item $\mathsf{LogicSet}$：検証ロジック（validator）の集合。Key を LogicIndex $\ell$ とし、value は $\mathsf{func}_\ell$ を与える写像であり、$\mathsf{LogicSet}[\ell] = \mathsf{func}_\ell$ と書く。
+	各 $\mathsf{func}_\ell$ は $(\mathsf{args}_\ell, \mathsf{modifier}_\ell, \mathsf{post\_state}_\ell, \mathsf{validation}_\ell)$ から成り、$\mathsf{modifier}_\ell$ は現状態で当該関数を実行可能かを判定し、$\mathsf{validation}_\ell$ は $\mathsf{post\_state}_\ell$ と $\mathsf{args}_\ell$ を検証して遷移の妥当性を確認する。
 	\item $\mathsf{TransSpec}$：状態と生成するトランザクションの形の二つから成る出力仕様
 \end{itemize}
 テンプレートは \textbf{普遍（protocol-level constant）} であり、台帳状態の更新で変化しない（R3, R4）。
 テンプレートは、ブロックチェーンネットワークの初期化時から不変である。
 
-\paragraph{Definition 7（Contract Instance：インスタンス記述子）}
+\paragraph{Definition 7：Contract Instance：インスタンス記述子}
 コントラクト・インスタンス $I$ は
 \begin{equation}
 	I := (\mathsf{c}_{id}, \mathsf{t}_{index}, \vec{a})
 \end{equation}
-で表す。$\vec{a}=(a_1,\dots,a_k)$ は $\mathsf{InitParams}$ に対応する初期化引数列であり、CreateSC の Constructor 引数として $\mathsf{InitParams}$ を初期化し、以後は更新されない。当事者集合（例：Buyer/Seller/Operator）や必要情報は $\vec{a}$ に含まれる前提とするため、$\mathsf{participants}$ のような別フィールドは置かない。コントラクトインスタンスの内部変数（$\mathsf{InitParams}$）は、CreateSC によって生成された際から不変である。
+で表す。$\vec{a}=(a_1,\dots,a_k)$ は $\mathsf{InitParams}$ に対応する初期化引数列であり、CreateContract の Constructor 引数として $\mathsf{InitParams}$ を初期化し、以後は更新されない。当事者集合（例：Buyer/Seller/Operator）や必要情報は $\vec{a}$ に含まれる前提とするため、$\mathsf{participants}$ のような別フィールドは置かない。コントラクトインスタンスの内部変数（$\mathsf{InitParams}$）は、CreateContract によって生成された際から不変である。
 $\mathsf{c}_{id}$ は決定的に導出される識別子であり、例えば
 \begin{equation}
-	\mathsf{c}_{id} := H(\mathsf{deployerAddr} \parallel \mathsf{t}_{index} \parallel \vec{a})
+	\mathsf{c}_{id} := H(\mathsf{addr}_{\mathrm{deployer}} \parallel \mathsf{t}_{index} \parallel \vec{a})
 \end{equation}
-のように作れる（重要なのは同一入力から一意であること）。ここで $\mathsf{deployerAddr}$ は CreateSC/Lock を作成する主体（デプロイヤ／作成者）のアドレスである。これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（R2, R3）。
+のように作れる（重要なのは同一入力から一意であること）。ここで $\mathsf{addr}_{\mathrm{deployer}}$ は CreateContract/LockUtxo を作成する主体（デプロイヤ／作成者）のアドレスである。これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（R2, R3）。
 
-\paragraph{Definition 8（Locked UTXO：型付き状態）}
+\paragraph{Definition 8：Locked UTXO：型付き状態}
 Locked UTXO は、単なる script 断片ではなくテンプレート参照と状態タグを伴う型付き状態である、という設計選好を仕様として固定する。
-Locked UTXO $u^\star$（Definition 1）において、$\mathsf{c}_{id}$ は参照先インスタンス、$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）である。本稿では $\mathsf{stateTag}$ を共有される唯一のグローバルステートとして扱う。
+Locked UTXO $u^\star$（Definition 1）において、$\mathsf{c}_{id}$ は参照先インスタンス、$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）であり、対応するテンプレート $\tau$ の $\mathsf{StateSet}_\tau$ に属する。本稿では $\mathsf{stateTag}$ を共有される唯一のグローバルステートとして扱う。
 実装上の埋め込みは Definition 1 の注記に同じであり、独立の状態欄を仮定しない。
 これにより「条件を script 断片に依存させる」から、「状態タグとテンプレート参照により検証する」へと、監査可能性が上限付きの表現に移る。
 
-\subsection{遷移規則：Create / Lock / Release / Finalize と Admissibility}
-本節では、Locked UTXO を生成・消費する遷移の妥当性を admissibility（許容条件）として定義する。要件は「外部裁量ではなく検証可能」＝決定的 admissibility である（R2）。
+\subsection{遷移規則：CreateContract / LockUtxo / Release / FinalizeContract と Admissibility}
+本節では、Locked UTXO を生成・消費する遷移の妥当性を admissibility、すなわち許容条件として定義する。要件は「外部裁量ではなく検証可能」＝決定的 admissibility である（R2）。
 
-\paragraph{Definition 9（Contract Create / Lock）}
+\paragraph{Definition 9：CreateContract / LockUtxo}
 \begin{itemize}
-	\item CreateSC：$\Gamma$ 内のテンプレート $\mathsf{t}_{index}$ と引数 $\vec{a}$、および $\mathsf{deployerAddr}$ を参照し、$\mathsf{c}_{id}$ を生成するトランザクション。
-	\item Lock：通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。Lock はインスタンス化された $\mathsf{c}_{id}$ に対して送信され、$\mathsf{stateTag}$ を初期状態に持つ $u^\star$ を生成する。出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。
+	\item CreateContract：$\Gamma$ 内のテンプレート $\mathsf{t}_{index}$ と引数 $\vec{a}$、および $\mathsf{addr}_{\mathrm{deployer}}$ を参照し、$\mathsf{c}_{id}$ を生成するトランザクション。
+	\item LockUtxo：通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。LockUtxo はインスタンス化された $\mathsf{c}_{id}$ に対して送信され、$\mathsf{stateTag}$ を初期状態に持つ $u^\star$ を生成する。出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。ここで $s_{\mathrm{init}} \in \mathsf{StateSet}_\tau$ はテンプレートが定める初期状態である。
 \end{itemize}
 
-\paragraph{Definition 10（Release / Transition）}
+\paragraph{Definition 10：Release / Transition}
 Locked UTXO $u^\star$ を入力として消費するトランザクションを contract transition tx と呼ぶ。
-特に Execute は contract transition tx の一種であり、$\mathsf{c}_{id}$ と関数 index（LogicIndex）$\ell$、および引数 $\mathsf{args}$ をフィールドとして持つ（例：$\mathsf{aux}$ 内に格納）。さらに、$\mathsf{c}_{id}$ から対応する Locked UTXO を取得し、$(\ell, \mathsf{args})$ から $\mathsf{modifier}_\ell$ と $\mathsf{validation}_\ell$ を取得して双方の検証を行い、通過した場合に $u^\star$ の $\mathsf{stateTag}$ を更新する。
-つまり、Execute トランザクションは Locked UTXO の状態遷移を命令するものであり、テンプレートはその検証機として働く。
-ここで $\ell$ はテンプレートが定める LogicIndex（遷移ラベル）である。型注釈として、
+特に ExecuteContract は contract transition tx の一種であり、$\mathsf{c}_{id}$ と関数 index（LogicIndex）$\ell$、および引数 $\mathsf{args}$ をフィールドとして持つ（例：$\mathsf{aux}$ 内に格納）。さらに、$\mathsf{c}_{id}$ から対応する Locked UTXO を取得し、$(\ell, \mathsf{args})$ から $\mathsf{modifier}_\ell$ と $\mathsf{validation}_\ell$ を取得して双方の検証を行い、通過した場合に $u^\star$ の $\mathsf{stateTag}$ を更新する。
+つまり、ExecuteContract トランザクションは Locked UTXO の状態遷移を命令するものであり、テンプレートはその検証機として働く。
+ここで $\ell$ はテンプレートが定める LogicIndex であり、遷移ラベルとして用いる。型注釈として、
 \begin{equation}
 	\mathsf{Pred}_{\tau,\ell} : \Sigma \times \mathsf{Tx} \times \mathsf{CID} \to \{\mathsf{true}, \mathsf{false}\}
 \end{equation}
@@ -136,28 +141,28 @@ $\mathsf{Pred}$ は $\Sigma$ と $tx$ の $\mathsf{in}/\mathsf{out}/\mathsf{aux}
 	\item[(ii)] 出力の一致：$\mathsf{out}$ が $\mathsf{TransSpec}_{\tau,\ell}$ に一致（受益者・配分・ロック継続・次状態タグ等）
 \end{enumerate}
 
-\paragraph{Definition 11（Finalize / Timeout）}
+\paragraph{Definition 11：FinalizeContract / Timeout}
 テンプレートは「誰でも起動可能な確定遷移」を持ち得る。たとえば、期限経過により自動的に決着する遷移（$\operatorname{after}(d), \operatorname{after}(t)$）を $\ell_{\mathrm{final}}$ として与え、上の admissibility で検証可能にする。これにより資金が永久拘束されないこと（liveness）を仕様として扱える（RQ3）。
 
 \subsection{不変条件（Invariants）と要件 R1--R4 への対応}
 本稿は、資金拘束・解放を「人間の裁量」ではなく制度（検証規則）として固定し、失敗遷移（misappropriation）を排除／拘束することを狙う。
 以下、テンプレート型スマートコントラクトが満たすべき不変条件を定義し、R1--R4 と対応付ける（RQ3）。
 
-\paragraph{Invariant S（Safety：価値保全）}
+\paragraph{Invariant S（Safety）}
 任意の admissible $tx$ に対し、価値保存と受益者制約が破れない。
 \begin{itemize}
 	\item 価値が任意に増えない（base rule）
 	\item テンプレートが許さない受益者への移転が生じない（$\mathsf{TransSpec}$ により拘束）
 \end{itemize}
 
-\paragraph{Invariant A（Authority Safety：単独カストディ排除）}
+\paragraph{Invariant A（Authority Safety）}
 Operator が単独で資金を不正流用できる遷移 $F$ が admissible にならない（R1）。
 典型には、署名条件・共同署名・期限付き自動遷移などで「単独での解放」を制度的に排除する。
 
-\paragraph{Invariant L（Liveness：決着性）}
-テンプレートが定める前提（期限・当事者署名など）が満たされれば、Locked 状態が永久に残留しない（デッドロックしない）。これは「Finalize/Timeout が誰でも起動可能」等で与えられる（RQ3）。
+\paragraph{Invariant L（Liveness）}
+テンプレートが定める前提（期限・当事者署名など）が満たされれば、Locked 状態が永久に残留しない（デッドロックしない）。これは「FinalizeContract/Timeout が誰でも起動可能」等で与えられる（RQ3）。
 
-\paragraph{Invariant B（Bounded Auditability：監査上限）}
+\paragraph{Invariant B（Bounded Auditability）}
 各テンプレート $\tau$ について、検証者が点検すべきロジックは $\mathsf{Bound}$ により上限付けられ、インスタンス化により複雑性が無制限に増えない（R3）。
 
 \paragraph{要件対応（まとめ）}
@@ -165,7 +170,7 @@ Operator が単独で資金を不正流用できる遷移 $F$ が admissible に
 	\item R1：$F$ を admissibility から排除（Authority Safety）
 	\item R2：$\mathsf{Pred}$ と $\mathsf{TransSpec}$ による決定的 admissibility
 	\item R3：テンプレートによる監査上限
-	\item R4：状態は基本的に UTXO（局所状態）。共有される状態語彙は $\mathsf{stateTag}$ に限定し、参照情報は $\Gamma$（不変）に保持
+	\item R4：状態は基本的に UTXO を局所状態として扱う。共有される状態語彙は $\mathsf{stateTag}$ に限定し、参照情報は $\Gamma$ を不変として保持
 \end{itemize}
 
 \subsection{次章への接続（テンプレート具体化）}

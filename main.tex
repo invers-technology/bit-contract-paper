@@ -20,12 +20,12 @@
 % --- Case Study macros ---
 \newcommand{\cid}{c_{\mathrm{id}}}
 \newcommand{\stag}{\mathsf{stateTag}}
-\newcommand{\Buyer}{\mathsf{A}}
-\newcommand{\Seller}{\mathsf{B}}
-\newcommand{\Oper}{\mathsf{C}}
-\newcommand{\sigA}{\mathrm{sig}(\Buyer)}
-\newcommand{\sigB}{\mathrm{sig}(\Seller)}
-\newcommand{\sigC}{\mathrm{sig}(\Oper)}
+\newcommand{\Buyer}{A}
+\newcommand{\Seller}{B}
+\newcommand{\Oper}{C}
+\newcommand{\sigA}{\sigma_{\Buyer}}
+\newcommand{\sigB}{\sigma_{\Seller}}
+\newcommand{\sigC}{\sigma_{\Oper}}
 \newcommand{\after}{\operatorname{after}}
 \newcommand{\before}{\operatorname{before}}
 \newcommand{\Szero}{\mathrm{S0}}
@@ -49,7 +49,7 @@
 \newcommand{\SellerAcceptCancel}{\mathrm{SellerAcceptCancel}}
 \newcommand{\OpRel}{\mathrm{OperatorMediateRelease}}
 \newcommand{\OpRef}{\mathrm{OperatorMediateRefund}}
-\newcommand{\Finalize}{\mathrm{ContractFinalize}}
+\newcommand{\Finalize}{\mathrm{FinalizeContract}}
 \newcommand{\Timeout}{\mathrm{ContractTimeout}}
 \newenvironment{transitions}{
 	\begin{equation*}

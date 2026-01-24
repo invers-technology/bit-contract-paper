@@ -19,12 +19,12 @@ DNM等はこの定義の「極端例」に該当し、計測研究により制�
 以降のモデル化は、資金拘束と解放条件の設計という抽象レベルに留め、具体的な運営方法・回避手段・実務手順に踏み込まない。
 
 \begin{itemize}
-	\item Buyer/Seller：需要側・供給側（機能ロール）
-	\item Operator/Custodian：取引インフラ提供者であり、資金の一時保有を担い得る主体（単一障害点になり得る）
-	\item Escrow / Payment facilitation：価値移転の補助として資金拘束を行う仕組み（エスクロー等）
-	\item Reputation / Feedback：身元不確証環境で信頼を代替する情報制度（補助制度）
+	\item Buyer/Seller：需要側・供給側の機能ロール
+	\item Operator/Custodian：取引インフラ提供者であり、資金の一時保有を担い得る主体で、単一障害点になり得る
+	\item Escrow / Payment facilitation：価値移転の補助として資金拘束を行う仕組みであり、エスクロー等を含む
+	\item Reputation / Feedback：身元不確証環境で信頼を代替する情報制度であり、補助制度として位置づける
 	\item Disappearance / Scams / Breakdown：市場の消失・閉鎖・詐欺的イベント等の制度リスク
-	\item Resilience / Migration：閉鎖等を受けた移行・エコシステムの存続形態（移動による持続等）
+	\item Resilience / Migration：閉鎖等を受けた移行・エコシステムの存続形態であり、移動による持続等を含む
 \end{itemize}
 
 \subsubsection{Actors and Roles}
@@ -32,9 +32,9 @@ DNM等はこの定義の「極端例」に該当し、計測研究により制�
 Escrow/持ち逃げの問題に限定するため、アクターは次の最小3者で十分である。
 
 \begin{itemize}
-	\item Buyer（買い手）：資金を預託し、条件が満たされれば支払を完了したい主体
-	\item Seller（売り手）：条件が満たされれば資金の解放を受けたい主体
-	\item Operator（運営／custodian）：決済補助として資金を一時保有し得る主体（単一支配が成立し得る点がリスクの核心）
+	\item Buyer：買い手として資金を預託し、条件が満たされれば支払を完了したい主体
+	\item Seller：売り手として条件が満たされれば資金の解放を受けたい主体
+	\item Operator：運営／custodianとして決済補助の資金を一時保有し得る主体であり、単一支配が成立し得る点がリスクの核心
 \end{itemize}
 
 評判（reputation）は、信頼形成の補助制度として重要であるが、IOM-CEにおける中心的失敗モード（custodial misappropriation）を規定する最小モデルの必須要素ではないため、本稿では「既存の緩和策」として後述する。
@@ -43,13 +43,13 @@ Escrow/持ち逃げの問題に限定するため、アクターは次の最小3
 IOM-CEを、資金の状態遷移として最小限に表現する。
 
 \begin{itemize}
-	\item $S0$: Funded escrow（資金拘束）：Buyerが資金をエスクローとして拘束
-	\item $S1$: Release to Seller（支払）：資金がSellerへ解放
-	\item $S2$: Refund to Buyer（返金）：資金がBuyerへ返還
+	\item $S0$: Funded escrow：Buyerが資金をエスクローとして拘束
+	\item $S1$: Release to Seller：資金がSellerへ解放
+	\item $S2$: Refund to Buyer：資金がBuyerへ返還
 \end{itemize}
 このとき問題となる失敗遷移は次である。
 
-$F$: Misappropriation（不正流用）：Operatorが資金を自己に移転（または回収不能化）する遷移
+$F$: Misappropriation：Operatorが資金を自己に移転（または回収不能化）する遷移
 
 本稿で扱う中心問題は、$S0$から$S1/S2$への正当遷移を「人間の裁量」ではなく、検証可能な条件として固定しつつ、$F$（Misappropriation）を制度として排除・拘束することである。
 言い換えれば、IOM-CEの核心は「取引の全過程」を一般化することではなく、資金拘束の単一障害点（custody point）を同定し、その構造的リスクを縮退させることである。
@@ -57,13 +57,13 @@ $F$: Misappropriation（不正流用）：Operatorが資金を自己に移転（
 \subsection{Existing solutions and gaps}
 IOM-CEにおけるリスクに対して、既存システムは複数の緩和策を採用してきたが、それらは万能ではない。
 
-D1. Reputation / Feedback（既存解）
+D1. Reputation / Feedback：既存解
 
 身元確認が困難な環境では、参加者は仮名的な評判・レビューに依存し、信頼を代替する。
 しかし評判は偽レビュー等で操作され得て、信頼問題を完全には解消しない。
 さらに、評判は「資金が運営の単独支配下にある」という構造そのものを除去しないため、custodial misappropriationに対する根本対策にはならない。
 
-D2. Multi-signature escrow（既存解）
+D2. Multi-signature escrow：既存解
 
 単独管理を避けるため、マルチシグ等で資金アクセスを分散する試みがある。
 これはOperator単独による$F$（Misappropriation）を抑止し得る一方で、鍵管理・参加者の利害・手続の透明性といった運用・ガバナンスが残存する。
@@ -85,45 +85,45 @@ D2. Multi-signature escrow（既存解）
 R1: Constrained custody / Non-custodial settlement
 Operatorが単独で資金を不正流用できる遷移$F$を、制度（検証規則）として排除または強く拘束すること。
 
-R2: Deterministic admissibility（許容条件の決定性）
+R2: Deterministic admissibility：許容条件の決定性
 $S0 \to S1$（支払）および$S0 \to S2$（返金）の許容条件を、外部の裁量ではなく検証可能な条件として表現できること。
 
-R3: Bounded auditability（監査可能性の上限）
+R3: Bounded auditability：監査可能性の上限
 契約ロジックはテンプレートとして制約され、利用者・監査者が点検できる複雑性の上限を持つこと。テンプレートは作成後にアップグレードできない。
 
 R4: Local state / minimal shared state
 グローバルステートへの依存を避け、(e)UTXO等の局所状態とロック指向の資産移転で表現できること。共有状態は $\mathsf{stateTag}$ のみに限定する。
 
 \subsection{Research Questions}
-\paragraph{RQ1（決定的表現可能性）}
+\paragraph{RQ1：決定的表現可能性}
 VMを用いず、形式化可能なテンプレート集合として、IOM-CEにおける $\mathrm{deposit} / \mathrm{release} / \mathrm{refund}$ を決定的に表現できるか？
 
-\paragraph{命題 P1（決定的表現可能性）}
+\paragraph{命題 P1：決定的表現可能性}
 焦点ケース（IOM-CE）の状態機械（$S0, S0D, S0X, S1, S2$）と各遷移ラベル $\ell$ について、テンプレート $\tau$ とインスタンス $\mathsf{c}_{id}$ を固定すれば、任意の $\Sigma$ と $tx$ に対して $\mathsf{Pred}_{\tau,\ell}(\Sigma, tx, \mathsf{c}_{id})$ の真偽が一意に定まり、真である場合に限り $\mathsf{out}(tx) \in \mathsf{TransSpec}_{\tau,\ell}(\Sigma, \mathsf{c}_{id})$ が成立する。
 
-\paragraph{RQ2（運用裁量の縮退）}
+\paragraph{RQ2：運用裁量の縮退}
 そのとき、運用裁量をどこまで縮退／移送できるか？
 
 \paragraph{定義（運用裁量の残余）}
 ある役割 $r$ について、「$r$ の単独署名（または単独操作）だけで到達できる資金移動遷移の集合」を $\mathrm{Disc}(r)$ と呼ぶ。
 
-\paragraph{命題 P2（Operator単独裁量の不在）}
+\paragraph{命題 P2：Operator単独裁量の不在}
 $\mathrm{Disc}(\mathsf{Operator})=\varnothing$。すなわち、運営 $C$ の単独署名だけで $S1/S2$ に到達する admissible な遷移は存在しない。
 
-\paragraph{命題 P2'（裁量の移送）}
-運営が関与する仲裁遷移は存在するが、それらは常に $(A \text{ or } B)$ の署名を伴うため、裁量は「運営単独」から「当事者の同意の証跡」へ移送される。
+\paragraph{命題 P2'：裁量の移送}
+運営が関与する仲裁遷移は存在するが、それらは常に $(\Buyer \text{ or } \Seller)$ の署名を伴うため、裁量は「運営単独」から「当事者の同意の証跡」へ移送される。
 
-\paragraph{RQ3（不変条件の保証範囲）}
+\paragraph{RQ3：不変条件の保証範囲}
 資金保全・権限安全・活性（デッドロックなし）を、不変条件としてどう定義し、どの範囲まで保証できるか？
 
-\paragraph{定理 T1（Safety）}
+\paragraph{定理 T1：Safety}
 任意の admissible $tx$ は価値保存と受益者制約を破らない（$\mathsf{TransSpec}$ により拘束）。
 
-\paragraph{定理 T2（Authority Safety）}
+\paragraph{定理 T2：Authority Safety}
 運営 $C$ 単独の不正流用遷移 $F$ は admissible にならない。
 
-\paragraph{定理 T3（Liveness）}
-期限条件（$\operatorname{after}(d), \operatorname{after}(t)$）により、ロック状態が永久残留しない（Finalize/Timeout が誰でも起動可能）。
+\paragraph{定理 T3：Liveness}
+期限条件（$\operatorname{after}(d), \operatorname{after}(t)$）により、ロック状態が永久残留しない（FinalizeContract/Timeout が誰でも起動可能）。
 
 本章で用いたIOM-CEの構成要素（Buyer/Seller/Operator、Escrow、消失・移行等）が先行研究で反復的に観察されることは、付録Aのエビデンス・マトリクスで可視化する。
 高リスク環境に関する計測研究は本稿の問題設定に経験的根拠を与えるが、本稿はそれらを設計対象としてではなく、抽象モデル化の根拠として引用する。
