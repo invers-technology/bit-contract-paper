@@ -1,26 +1,40 @@
 \section{Related Work}
 
 \subsection{Contract Paradigms}
-Bitcoin Script/UTXOは、意図的に非チューリング完全なスタック言語として設計され、予測可能性と攻撃面の抑制を優先している。検証は局所的であり、監査対象（audit surface）が事前に見積もりやすい点が特長である。\cite{Nakamoto2008,Okupski2016,BitcoinWiki2025}
+Bitcoin Script/UTXOは、意図的に非チューリング完全なスタック言語として設計され、予測可能性と攻撃面の抑制を優先している。
+検証は局所的であり、監査対象（audit surface）が事前に見積もりやすい点が特長である。
+\cite{Nakamoto2008,Okupski2016,BitcoinWiki2025}
 
-対照的にEthereumのEVMは、アカウント型のグローバルステートを前提に高い表現力と汎用性を提供する一方、状態更新と合成可能性の拡大により意味論が複雑化し、監査負荷や脆弱性リスクが増えやすい。\cite{Buterin2014,Wood2025}
-このギャップは単なる「表現力の差」ではなく、監査対象の規模と事前見積もり可能性の差として整理できる。\cite{Chakravarty2020}
+対照的にEthereumのEVMは、アカウント型のグローバルステートを前提に高い表現力と汎用性を提供する一方、状態更新と合成可能性の拡大により意味論が複雑化し、監査負荷や脆弱性リスクが増えやすい。
+\cite{Buterin2014,Wood2025}
+このギャップは単なる「表現力の差」ではなく、監査対象の規模と事前見積もり可能性の差として整理できる。
+\cite{Chakravarty2020}
 
 \subsection{Limitations}
-WasmやRISC-Vのような別命令セットを採用した環境は「より良いVM」というよりも、依然としてVM型の実行環境である。Polkadot/ink!ではWasm実行環境とRISC-V/PolkaVMの併置や移行が明示されている。\cite{Polkadot2026,Polkadot2025,Ink2025a,Ink2025b,Ink2025c}
-RISC-V上でLinuxを動かすCartesi Machineも、VM型基盤として提示される。\cite{Teixeira2018}
-したがって汎用実行と状態更新、相互作用・合成可能性を中核に置く限り、監査対象の膨張、アップグレード解釈、実装差・運用差といった論点は残りうる。\cite{Polkadot2026,Ink2025a,Ink2025b,Teixeira2018}
+WasmやRISC-Vのような別命令セットを採用した環境は「より良いVM」というよりも、依然としてVM型の実行環境である。
+Polkadot/ink!ではWasm実行環境とRISC-V/PolkaVMの併置や移行が明示されている。
+\cite{Polkadot2026,Polkadot2025,Ink2025a,Ink2025b,Ink2025c}
+RISC-V上でLinuxを動かすCartesi Machineも、VM型基盤として提示される。
+\cite{Teixeira2018}
+したがって汎用実行と状態更新、相互作用・合成可能性を中核に置く限り、監査対象の膨張、アップグレード解釈、実装差・運用差といった論点は残りうる。
+\cite{Polkadot2026,Ink2025a,Ink2025b,Teixeira2018}
 
 \paragraph{eUTXO}
-中間に位置づけられるのが eUTXO であり、UTXOの意味論的な単純さを維持しつつ、validator scripts と datum/redeemer/context によって表現力を拡張する。\cite{Chakravarty2020}
-Cardano側はトランザクション検証の決定性（no surprises）を強調しており、予測可能性を保持した表現拡張として位置づけられる。\cite{IOG2021a,IOG2021b,Cardano2025a,Cardano2025b,Chakravarty2020}
+中間に位置づけられるのが eUTXO であり、UTXOの意味論的な単純さを維持しつつ、validator scripts と datum/redeemer/context によって表現力を拡張する。
+\cite{Chakravarty2020}
+Cardano側はトランザクション検証の決定性（no surprises）を強調しており、予測可能性を保持した表現拡張として位置づけられる。
+\cite{IOG2021a,IOG2021b,Cardano2025a,Cardano2025b,Chakravarty2020}
 
 \paragraph{Szabo}
-Szaboは、ネットワーク上の関係（信用・権利・支払い等）をプロトコルとして形式化し、セキュアに実装するという問題設定を提示した。\cite{Szabo1996,Szabo1997}
-この系譜は、スマートコントラクトを「汎用プログラム」ではなく「関係を固定する取引プロトコル」として捉える視点を支持する。\cite{Szabo1996,Szabo1997}
+Szaboは、ネットワーク上の関係（信用・権利・支払い等）をプロトコルとして形式化し、セキュアに実装するという問題設定を提示した。
+\cite{Szabo1996,Szabo1997}
+この系譜は、スマートコントラクトを「汎用プログラム」ではなく「関係を固定する取引プロトコル」として捉える視点を支持する。
+\cite{Szabo1996,Szabo1997}
 
 \subsection{Gap}
-既存研究は、(i) UTXO/Scriptおよびその拡張が提供する局所検証性・予測可能性と、(ii) VM型実行環境が提供する汎用性・合成可能性の間にあるトレードオフを繰り返し指摘してきた。\cite{Nakamoto2008,Okupski2016,Chakravarty2020,Polkadot2026,Wood2025}
-しかし、匿名・身元不確かな市場で頻出するエスクロー等の設計に対し、許される遷移を列挙でき、成立条件と遷移結果が検証可能に固定され、監査負荷が上限付きとなる「テンプレート型契約」として、この中間領域を体系化した枠組みは十分整理されていない。\cite{Chakravarty2020,Szabo1996}
+既存研究は、(i) UTXO/Scriptおよびその拡張が提供する局所検証性・予測可能性と、(ii) VM型実行環境が提供する汎用性・合成可能性の間にあるトレードオフを繰り返し指摘してきた。
+\cite{Nakamoto2008,Okupski2016,Chakravarty2020,Polkadot2026,Wood2025}
+しかし、匿名・身元不確かな市場で頻出するエスクロー等の設計に対し、許される遷移を列挙でき、成立条件と遷移結果が検証可能に固定され、監査負荷が上限付きとなる「テンプレート型契約」として、この中間領域を体系化した枠組みは十分整理されていない。
+\cite{Chakravarty2020,Szabo1996}
 その結果、実務では評判や運営判断に依存する余地（カストディ集中・運用裁量）が残りうる。
 本稿は、このギャップに対してテンプレート型契約の形式化と遷移仕様化を提示し、検証可能性と監査上限を両立する設計指針を明確化する。

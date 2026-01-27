@@ -89,10 +89,12 @@ R2: Deterministic admissibility：許容条件の決定性
 $S0 \to S1$（支払）および$S0 \to S2$（返金）の許容条件を、外部の裁量ではなく検証可能な条件として表現できること。
 
 R3: Bounded auditability：監査可能性の上限
-契約ロジックはテンプレートとして制約され、利用者・監査者が点検できる複雑性の上限を持つこと。テンプレートは作成後にアップグレードできない。
+契約ロジックはテンプレートとして制約され、利用者・監査者が点検できる複雑性の上限を持つこと。
+テンプレートは作成後にアップグレードできない。
 
 R4: Local state / minimal shared state
-グローバルステートへの依存を避け、(e)UTXO等の局所状態とロック指向の資産移転で表現できること。共有状態は $\mathsf{stateTag}$ のみに限定する。
+グローバルステートへの依存を避け、(e)UTXO等の局所状態とロック指向の資産移転で表現できること。
+共有状態は $\mathsf{stateTag}$ のみに限定する。
 
 \subsection{Research Questions}
 \paragraph{RQ1：決定的表現可能性}
@@ -108,7 +110,8 @@ VMを用いず、形式化可能なテンプレート集合として、IOM-CEに
 ある役割 $r$ について、「$r$ の単独署名（または単独操作）だけで到達できる資金移動遷移の集合」を $\mathrm{Disc}(r)$ と呼ぶ。
 
 \paragraph{命題 P2：Operator単独裁量の不在}
-$\mathrm{Disc}(\mathsf{Operator})=\varnothing$。すなわち、運営 $C$ の単独署名だけで $S1/S2$ に到達する admissible な遷移は存在しない。
+$\mathrm{Disc}(\mathsf{Operator})=\varnothing$。
+すなわち、運営 $C$ の単独署名だけで $S1/S2$ に到達する admissible な遷移は存在しない。
 
 \paragraph{命題 P2'：裁量の移送}
 運営が関与する仲裁遷移は存在するが、それらは常に $(\mathsf{pk}_A \text{ or } \mathsf{pk}_B)$ の署名を伴うため、裁量は「運営単独」から「当事者の同意の証跡」へ移送される。

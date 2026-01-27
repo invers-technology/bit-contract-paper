@@ -15,7 +15,8 @@ $\parallel$ は連結（concatenation）を表し、$H(\cdot)$ は暗号学的�
 $\mathsf{PK}$ は公開鍵集合であり、$\mathsf{pk} \in \mathsf{PK}$ は P2PKH などの識別子に対応する公開鍵を抽象化したものである（実装上は script/commitment/metadata に埋め込める）。
 
 \subsection{UTXO ステートマシン}
-本節は Bitcoin の Script や補助入力構造を忠実に再現しない。$U$ と遷移として抽象化し、テンプレート参照・状態タグ・検証述語・出力仕様に必要な最小要素のみを定義する。
+本節は Bitcoin の Script や補助入力構造を忠実に再現しない。
+$U$ と遷移として抽象化し、テンプレート参照・状態タグ・検証述語・出力仕様に必要な最小要素のみを定義する。
 署名検証等の基礎規則は抽象述語 $\mathsf{BaseValid}$ にまとめる。
 \paragraph{Definition 1：UTXO と Outpoint}
 Outpoint を $\mathsf{op}=(\mathsf{tx}_{id}, i)$ とし、UTXO を $u$ で次のように表す：
@@ -25,23 +26,29 @@ Outpoint を $\mathsf{op}=(\mathsf{tx}_{id}, i)$ とし、UTXO を $u$ で次の
 \begin{equation}
 	u^\star=(\mathsf{op}, v, \mathsf{pk}, \mathsf{c}_{id}, \mathsf{stateTag})
 \end{equation}
-ここで $v$ は額面、$\mathsf{pk}$ は所有者（支出権限）を表す公開鍵、$u$ は通常の UTXO である。テンプレート参照と状態タグを伴うロック状態の UTXO を \textbf{Locked UTXO} と呼び、$u^\star$ と記す。
-\textbf{実装上は、$(\mathsf{c}_{id}, \mathsf{stateTag})$ は $tx$ の $\mathsf{aux}$ に埋め込まれ得る抽象化であり、$u$ に独立のフィールドがあることを仮定しない。}
-（Bitcoin Script 相当では $(\mathsf{c}_{id}, \mathsf{stateTag})$ を script/commitment/metadata として埋め込める。eUTXO では datum として扱える。）
+ここで $v$ は額面、$\mathsf{pk}$ は所有者（支出権限）を表す公開鍵、$u$ は通常の UTXO である。
+テンプレート参照と状態タグを伴うロック状態の UTXO を \textbf{Locked UTXO} と呼び、$u^\star$ と記す。
+\textbf{実装上は、$(\mathsf{c}_{id}, \mathsf{stateTag})$ は $tx$ の $\mathsf{aux}$ に埋め込まれ得る抽象化であり、$u$ に独立のフィールドがあることを仮定しない。
+}
+（Bitcoin Script 相当では $(\mathsf{c}_{id}, \mathsf{stateTag})$ を script/commitment/metadata として埋め込める。
+eUTXO では datum として扱える。
+）
 
 \paragraph{Definition 2：台帳状態}
 $\Sigma$ を
 \begin{equation}
 	\Sigma := (U, \Gamma)
 \end{equation}
-とする。$U$ は未消費 UTXO の集合、$\Gamma$ はテンプレート集合（および必要な参照情報）から成る不変レジストリである（R4）。
+とする。
+$U$ は未消費 UTXO の集合、$\Gamma$ はテンプレート集合（および必要な参照情報）から成る不変レジストリである（R4）。
 
 \paragraph{Definition 3：トランザクション}
 $tx$ を
 \begin{equation}
 	tx := (\mathsf{in}, \mathsf{out}, \mathsf{aux})
 \end{equation}
-とする。$\mathsf{in}$ は入力 outpoint 列 $\mathsf{in}:=[\mathsf{op}_j]$、$\mathsf{out}$ は出力 $u$ 列、$\mathsf{aux}$ は署名・期限情報など検証に必要な補助入力である。
+とする。
+$\mathsf{in}$ は入力 outpoint 列 $\mathsf{in}:=[\mathsf{op}_j]$、$\mathsf{out}$ は出力 $u$ 列、$\mathsf{aux}$ は署名・期限情報など検証に必要な補助入力である。
 Bitcoinと同様に、本稿の $tx$ は from/to アドレスを明示的なフィールドとして含まない。
 本稿で $\mathsf{pk}_{\mathrm{from}}$ と記す場合は、入力 $u$ の所有者（消費権限の主体）を指す略記であり、明示フィールドではなく入力の検証から同定される。
 
@@ -52,7 +59,10 @@ Bitcoinと同様に、本稿の $tx$ は from/to アドレスを明示的なフ�
 \texttt{cid}、
 \texttt{schema\_id} または \texttt{tindex}、
 \texttt{payload\_bytes}
-を含む。ここで \texttt{payload\_bytes} は型固有データである。合意・検証・$\mathsf{c}_{id}$ 導出に用いるのは必ずシリアライズ済み byte[]（例：\texttt{init\_params\_bytes}）であり、JSON などの文字列表現は表示・ログ用途の非合意データに限る。\texttt{tx\_type} を合意対象として固定するのは、型の曖昧解釈を排除し、安価な分類で DoS 耐性を高め、\texttt{proto\_version}/\texttt{payload\_bytes} により将来拡張を可能にするためである。
+を含む。
+ここで \texttt{payload\_bytes} は型固有データである。
+合意・検証・$\mathsf{c}_{id}$ 導出に用いるのは必ずシリアライズ済み byte[]（例：\texttt{init\_params\_bytes}）であり、JSON などの文字列表現は表示・ログ用途の非合意データに限る。
+\texttt{tx\_type} を合意対象として固定するのは、型の曖昧解釈を排除し、安価な分類で DoS 耐性を高め、\texttt{proto\_version}/\texttt{payload\_bytes} により将来拡張を可能にするためである。
 
 \paragraph{Definition 4：基礎検証：UTXO 妥当性}
 $tx$ が $\Sigma$ 上で基礎的に妥当であるとは、$\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たすことをいう。
@@ -68,7 +78,8 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 \begin{equation}
 	\Sigma \xrightarrow{tx} \Sigma'
 \end{equation}
-を定義する。ここで $U_{\mathrm{in}}(tx)$ は入力が参照する $u$ の集合、$U_{\mathrm{out}}(tx)$ は出力 $u$ の集合とし、
+を定義する。
+ここで $U_{\mathrm{in}}(tx)$ は入力が参照する $u$ の集合、$U_{\mathrm{out}}(tx)$ は出力 $u$ の集合とし、
 \begin{equation}
 	U' := (U \setminus U_{\mathrm{in}}(tx)) \cup U_{\mathrm{out}}(tx), \quad \Gamma' := \Gamma
 \end{equation}
@@ -84,8 +95,10 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 \end{equation}
 \begin{itemize}
 	\item $\mathsf{LockUtxo}$：資産を拘束する操作（どの形の $u$ を Locked 状態にするか）
-	\item $\mathsf{Pred}$：解放条件（unlock predicate）。外部裁量ではなく検証可能な述語である（R2）。
-	\item $\mathsf{Trans}$：条件成立時に許される出力形（prescribed transition / template）。出力が任意ではなく、テンプレートで上限付きに規定される（R3）。
+	\item $\mathsf{Pred}$：解放条件（unlock predicate）。
+外部裁量ではなく検証可能な述語である（R2）。
+	\item $\mathsf{Trans}$：条件成立時に許される出力形（prescribed transition / template）。
+出力が任意ではなく、テンプレートで上限付きに規定される（R3）。
 \end{itemize}
 
 \subsection{オンチェーン対象：Template / Contract Instance / $u^\star$}
@@ -104,15 +117,19 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 	      LockUtxo 時に与えられる引数を $\mathsf{InitParams}$ 同様に検証するために用いられる。
 	\item $\mathsf{StateSet}$：テンプレートが取りうる有限の状態ラベル集合。
 	      $s_{\mathrm{init}} \in \mathsf{StateSet}$ を初期状態とする。
-	\item $\mathsf{LogicSet}$：検証ロジック（validator）の集合。Key を LogicIndex $\ell$ とし、value は $\mathsf{func}_\ell$ を与える写像であり、$\mathsf{LogicSet}[\ell] = \mathsf{func}_\ell$ と書く。
+	\item $\mathsf{LogicSet}$：検証ロジック（validator）の集合。
+Key を $\mathsf{LogicIndex}$ $\ell$ とし、value は $\mathsf{func}_\ell$ を与える写像であり、$\mathsf{LogicSet}[\ell] = \mathsf{func}_\ell$ と書く。
 	      各 $\mathsf{func}_\ell$ は $(\mathsf{args}_\ell, \mathsf{modifier}_\ell, \mathsf{post\_state}_\ell, \mathsf{validation}_\ell)$ から成り、$\mathsf{modifier}_\ell$ は現状態で当該関数を実行可能かを判定し、$\mathsf{validation}_\ell$ は $\mathsf{post\_state}_\ell$ と $\mathsf{args}_\ell$ を検証して遷移の妥当性を確認する。
 	\item $\mathsf{TransSpec}$：状態と生成する $tx$ の形の二つから成る出力仕様
 \end{itemize}
-本稿ではテンプレート $\tau$ を記述する DSL として Computational Law DSL である Stipula を採用する。Stipula は自然言語的な契約条項を $\mathsf{Pred}$ および各遷移に対応する $\mathsf{TransSpec}$ として形式化し、検証者が $tx$ を見て一意に判定できる決定的条件（R2）として与える。
-また、テンプレート制約による監査上限（R3）を、実装規律ではなく仕様記述の表現力として固定できる点が Stipula 採用の理由である。UTXO は実行モデル、Stipula はテンプレート仕様の記述層として位置づけられ、$\mathsf{stateTag}$ と不変レジストリ $\Gamma$ 以外の共有状態を増やさない。
+本稿ではテンプレート $\tau$ を記述する DSL として Computational Law DSL である Stipula を採用する。
+Stipula は自然言語的な契約条項を $\mathsf{Pred}$ および各遷移に対応する $\mathsf{TransSpec}$ として形式化し、検証者が $tx$ を見て一意に判定できる決定的条件（R2）として与える。
+また、テンプレート制約による監査上限（R3）を、実装規律ではなく仕様記述の表現力として固定できる点が Stipula 採用の理由である。
+UTXO は実行モデル、Stipula はテンプレート仕様の記述層として位置づけられ、$\mathsf{stateTag}$ と不変レジストリ $\Gamma$ 以外の共有状態を増やさない。
 $\Gamma$ は、プロトコル・バージョン $\mathsf{v}_{\mathrm{proto}}$ の下でのコンセンサス定数（protocol-level constant）であり、$\Sigma$ の更新では変化しない（R3, R4）。
-ただし Γ の変更（追加・廃止・修正）は アプリ層での差し替えではなく、ネットワーク合意を伴うプロトコル更新（soft/hard fork）としてのみ起こり得る。本稿は単一バージョン v に固定して議論する。
-τ ∈ Γ は「契約コード」ではなく 検証規則（consensus-verifiable predicate / transition specification）であるため、個別の作成者や当事者が任意に更新できない。
+ただし $\Gamma$ の変更（追加・廃止・修正）は アプリ層での差し替えではなく、ネットワーク合意を伴うプロトコル更新（soft/hard fork）としてのみ起こり得る。
+本稿は単一バージョン $\mathsf{v}_{\mathrm{proto}}$ に固定して議論する。
+$\tau \in \Gamma$ は「契約コード」ではなく 検証規則（consensus-verifiable predicate / transition specification）であるため、個別の作成者や当事者が任意に更新できない。
 
 \paragraph{Definition 7：Contract Instance：インスタンス記述子}
 コントラクト・インスタンス $I$ は
@@ -133,34 +150,43 @@ $\mathsf{c}_{id}$ は決定的に導出される識別子であり、例えば
 
 \paragraph{Definition 8：$u^\star$：型付き状態}
 $u^\star$ は、テンプレート参照と状態タグを伴う型付き状態である、という設計選好を仕様として固定する。
-$u^\star$（Definition 1）において、$\mathsf{c}_{id}$ は参照先インスタンス、$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）であり、対応するテンプレート $\tau$ の $\mathsf{StateSet}_\tau$ に属する。本稿では $\mathsf{stateTag}$ を共有される唯一のグローバルステートとして扱う。
+$u^\star$（Definition 1）において、$\mathsf{c}_{id}$ は参照先インスタンス、$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）であり、対応するテンプレート $\tau$ の $\mathsf{StateSet}_\tau$ に属する。
+本稿では $\mathsf{stateTag}$ を共有される唯一のグローバルステートとして扱う。
 実装上の埋め込みは Definition 1 の注記に同じであり、独立の状態欄を仮定しない。
 これにより「条件を script 断片に依存させる」から、「状態タグとテンプレート参照により検証する」へと、監査可能性が上限付きの表現に移る。
 
 \subsection{遷移規則：CreateContract / LockUtxo / Release / FinalizeContract と Admissibility}
-本節では、$u^\star$ を生成・消費する遷移の妥当性を admissibility、すなわち許容条件として定義する。要件は「外部裁量ではなく検証可能」＝決定的 admissibility である（R2）。
+本節では、$u^\star$ を生成・消費する遷移の妥当性を admissibility、すなわち許容条件として定義する。
+要件は「外部裁量ではなく検証可能」＝決定的 admissibility である（R2）。
 
 \paragraph{Definition 9：CreateContract / LockUtxo}
 \begin{itemize}
-	\item CreateContract：$\Gamma$ 内のテンプレート $\mathsf{t}_{index}$ と \texttt{init\_params\_bytes}、および $\mathsf{tx}_{id}$・$\mathsf{pk}_{\mathrm{from}}$・$\mathsf{nonce}$ を参照し、$\mathsf{c}_{id}$ を生成する $tx$ である。ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{CREATE} とする。
-	\item LockUtxo：通常 $u$ を消費し、$u^\star$ を出力する。LockUtxo はインスタンス化された $\mathsf{c}_{id}$ に対して送信され、$\mathsf{stateTag}$ を初期状態に持つ $u^\star$ を生成する。出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。ここで $s_{\mathrm{init}} \in \mathsf{StateSet}_\tau$ はテンプレートが定める初期状態である。ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{LOCK} とする。
+	\item CreateContract：$\Gamma$ 内のテンプレート $\mathsf{t}_{index}$ と \texttt{init\_params\_bytes}、および $\mathsf{tx}_{id}$・$\mathsf{pk}_{\mathrm{from}}$・$\mathsf{nonce}$ を参照し、$\mathsf{c}_{id}$ を生成する $tx$ である。
+ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{CREATE} とする。
+	\item LockUtxo：通常 $u$ を消費し、$u^\star$ を出力する。
+LockUtxo はインスタンス化された $\mathsf{c}_{id}$ に対して送信され、$\mathsf{stateTag}$ を初期状態に持つ $u^\star$ を生成する。
+出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。
+ここで $s_{\mathrm{init}} \in \mathsf{StateSet}_\tau$ はテンプレートが定める初期状態である。
+ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{LOCK} とする。
 \end{itemize}
 
 \paragraph{Definition 10：Release / Transition}
 $u^\star$ を入力として消費する $tx$ を contract transition $tx$ と呼ぶ。
-特に ExecuteContract は contract transition $tx$ の一種であり、$\mathsf{c}_{id}$ と関数 index（LogicIndex）$\ell$、および引数 $\mathsf{args}$ をフィールドとして持つ（例：$\mathsf{aux}$ 内に格納）。
+特に ExecuteContract は contract transition $tx$ の一種であり、$\mathsf{c}_{id}$ と関数 index（$\mathsf{LogicIndex}$）$\ell$、および引数 $\mathsf{args}$ をフィールドとして持つ（例：$\mathsf{aux}$ 内に格納）。
 ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{EXECUTE} とし、\texttt{state\_ref} と \texttt{call\_data\_bytes}（canonical）を含む。
 ExecuteContract は対応する $u^\star$ を入力として消費し、その消費により一回性を担保する（$\mathsf{aux}$ だけでの担保は不可）。
 さらに、$\mathsf{c}_{id}$ から対応する $u^\star$ を取得し、$(\ell, \mathsf{args})$ から $\mathsf{modifier}_\ell$ と $\mathsf{validation}_\ell$ を取得して双方の検証を行い、通過した場合に $u^\star$ の $\mathsf{stateTag}$ を更新する。
 つまり、ExecuteContract $tx$ は $u^\star$ の状態遷移を命令するものであり、テンプレートはその検証機として働く。
-ここで $\ell$ はテンプレートが定める LogicIndex であり、遷移ラベルとして用いる。型注釈として、
+ここで $\ell$ はテンプレートが定める $\mathsf{LogicIndex}$ であり、遷移ラベルとして用いる。
+型注釈として、
 \begin{equation}
 	\mathsf{Pred}_{\tau,\ell} : \Sigma \times \mathsf{Tx} \times \mathsf{CID} \to \{\mathsf{true}, \mathsf{false}\}
 \end{equation}
 \begin{equation}
 	\mathsf{TransSpec}_{\tau,\ell} : \Sigma \times \mathsf{CID} \to \mathcal{P}(\mathsf{Out})
 \end{equation}
-を用いる。ここで $\mathsf{Tx}$ は $tx$ の集合、$\mathsf{CID}$ はコントラクト識別子集合、$\mathsf{Out}$ は出力 $u$ 列の集合である。
+を用いる。
+ここで $\mathsf{Tx}$ は $tx$ の集合、$\mathsf{CID}$ はコントラクト識別子集合、$\mathsf{Out}$ は出力 $u$ 列の集合である。
 $\mathsf{Pred}$ は $\Sigma$ と $tx$ の $\mathsf{in}/\mathsf{out}/\mathsf{aux}$ を参照して決定的に真偽が定まる述語である。
 このとき、次を満たすときに限り $tx$ は admissible とする。
 \begin{enumerate}
@@ -169,7 +195,9 @@ $\mathsf{Pred}$ は $\Sigma$ と $tx$ の $\mathsf{in}/\mathsf{out}/\mathsf{aux}
 \end{enumerate}
 
 \paragraph{Definition 11：FinalizeContract / Timeout}
-テンプレートは「誰でも起動可能な確定遷移」を持ち得る。たとえば、期限経過により自動的に決着する遷移（$\operatorname{after}(d), \operatorname{after}(t)$）を $\ell_{\mathrm{final}}$ として与え、上の admissibility で検証可能にする。これにより資金が永久拘束されないこと（liveness）を仕様として扱える（RQ3）。
+テンプレートは「誰でも起動可能な確定遷移」を持ち得る。
+たとえば、期限経過により自動的に決着する遷移（$\operatorname{after}(d), \operatorname{after}(t)$）を $\ell_{\mathrm{final}}$ として与え、上の admissibility で検証可能にする。
+これにより資金が永久拘束されないこと（liveness）を仕様として扱える（RQ3）。
 
 \subsection{不変条件（Invariants）と要件 R1--R4 への対応}
 本稿は、資金拘束・解放を「人間の裁量」ではなく制度（検証規則）として固定し、失敗遷移（misappropriation）を排除／拘束することを狙う。
@@ -187,7 +215,8 @@ Operator が単独で資金を不正流用できる遷移 $F$ が admissible に
 典型には、署名条件・共同署名・期限付き自動遷移などで「単独での解放」を制度的に排除する。
 
 \paragraph{Invariant L（Liveness）}
-テンプレートが定める前提（期限・当事者署名など）が満たされれば、Locked 状態が永久に残留しない（デッドロックしない）。これは「FinalizeContract/Timeout が誰でも起動可能」等で与えられる（RQ3）。
+テンプレートが定める前提（期限・当事者署名など）が満たされれば、Locked 状態が永久に残留しない（デッドロックしない）。
+これは「FinalizeContract/Timeout が誰でも起動可能」等で与えられる（RQ3）。
 
 \paragraph{Invariant B（Bounded Auditability）}
 各テンプレート $\tau$ について、検証者が点検すべきロジックは $\mathsf{Bound}$ により上限付けられ、インスタンス化により複雑性が無制限に増えない（R3）。
@@ -197,7 +226,8 @@ Operator が単独で資金を不正流用できる遷移 $F$ が admissible に
 	\item R1：$F$ を admissibility から排除（Authority Safety）
 	\item R2：$\mathsf{Pred}$ と $\mathsf{TransSpec}$ による決定的 admissibility
 	\item R3：テンプレートによる監査上限
-	\item R4：状態は基本的に UTXO を局所状態として扱う。共有される状態語彙は $\mathsf{stateTag}$ に限定し、参照情報は $\Gamma$ を不変として保持
+	\item R4：状態は基本的に UTXO を局所状態として扱う。
+共有される状態語彙は $\mathsf{stateTag}$ に限定し、参照情報は $\Gamma$ を不変として保持
 \end{itemize}
 
 \subsection{次章への接続（テンプレート具体化）}
