@@ -2,7 +2,7 @@
 本章では、UTXOを用いたスマートコントラクトの実現に関するトランザクションを論じる。
 4章で与えたテンプレート／インスタンス／Locked UTXO および admissibility の定義を前提に、トランザクションの型（classes）として作成・実行・確定の流れを整理する。
 本章で扱うトランザクションは、CreateContract、LockUtxo、ExecuteContract、FinalizeContractの4種類である。
-トランザクションの一般形は第4章（Formalization）の Definition 3 に従う。以降は各“型”ごとに、Definition 3 の $\mathsf{out}/\mathsf{aux}$ に課す追加制約（marker、含めるパラメータ、$\mathsf{c}_{id}$ 導出など）のみを列挙する。
+トランザクションの一般形は第4章（Formalization）の Definition 3 に従う。以降は各“型”ごとに、ContractTx 共通ヘッダに基づく $\mathsf{aux}$ と $\mathsf{out}$ の追加制約のみを列挙する。トランザクション型の判定は in/out の有無などの否定条件に依存せず、\texttt{tx\_type} によって一意に定める。
 本章の各遷移 $\ell$ は、$\mathsf{stateTag}$ 付きの Locked UTXO を入力に取り、$\mathsf{TransSpec}$ が指定する (i) 次の Locked UTXO への更新 または (ii) 解放（$S1/S2$）の出力 を生成する“トランザクション型”である。
 以降の具体化では、Escrow のテンプレート index を $\mathsf{t}_{index}=1$ と固定する。以下の表記は本章のトランザクションモデルに従う。
 \begin{enumerate}
@@ -11,29 +11,43 @@
 	\item 2 で参照した $\mathsf{c}_{id}$ に対して ExecuteContract トランザクション（$tx_\ell$）を送信し、処理を行う。
 \end{enumerate}
 
+\subsection{ContractTx 判定（\texttt{tx\_type} による分類）}
+ContractTx の型判定は $\mathsf{aux}$ に含まれる \texttt{tx\_type} に基づき、in/out の欠如などの形推測では分類しない。判定手順は次である。
+\begin{quote}
+	\small
+	\begin{verbatim}
+Parse aux -> hdr
+if hdr.tx_type not in {CREATE, LOCK, EXECUTE, FINALIZE}: return NotContractTx
+if not HasRequiredFields(hdr.tx_type, hdr): return Invalid
+return StrictCheck(hdr.tx_type, tx, hdr)
+\end{verbatim}
+\end{quote}
+StrictCheck は canonical bytes 上での TypeCheck、cid 再計算、署名検証、入力消費、出力整合を含む。排他性は \texttt{tx\_type} の一意性によって担保され、同一 Tx が複数の型として成立しない。
+DoS 耐性の観点では、canonical bytes と cheap check により検証コストを一定化し、形推測による余分な探索を避ける。合意安全性の観点では、\texttt{tx\_type} と byte[] を合意対象にすることで曖昧な解釈差を排除できる。将来拡張性の観点では、\texttt{proto\_version} と \texttt{payload\_bytes} により新型の追加を互換的に扱える。
+
 \subsection{Creation}
 Definition 9 の CreateContract に対応する。
-CreateContract は $\mathsf{out}$ に $\mathsf{to}=0x0$ の出力（marker/burn）を含み、$\mathsf{aux}$ に $\mathsf{t}_{index}$ と $\mathsf{InitParams}$ を含む。さらに
+CreateContract は $\mathsf{aux}$ の \texttt{tx\_type} を \texttt{CREATE} とし、\texttt{tindex}（または \texttt{schema\_id}）、\texttt{init\_params\_bytes}（canonical）、\texttt{nonce}、および \texttt{cid} を含む。$\mathsf{c}_{id}$ は
 \begin{equation}
-	\mathsf{TypeCheck}(\mathsf{InitParams}, \mathsf{ArgSchema}[\mathsf{t}_{index}])=\mathsf{true}
+	\mathsf{c}_{id} := H(\mathsf{addr}_{\mathrm{deployer}} \parallel \mathsf{nonce} \parallel \mathsf{t}_{index} \parallel \mathsf{init\_params\_bytes})
 \end{equation}
-を満たし、$\mathsf{c}_{id}$ は
+により再計算可能であることを要求する。$\mathsf{TypeCheck}$ は
 \begin{equation}
-	\mathsf{c}_{id} := H(\mathsf{addr}_{\mathrm{deployer}} \parallel \mathsf{t}_{index} \parallel \mathsf{InitParams})
+	\mathsf{TypeCheck}(\mathsf{init\_params\_bytes}, \mathsf{ArgSchema}[\mathsf{t}_{index}])=\mathsf{true}
 \end{equation}
-により決定的に導出される。ここで $\mathsf{ArgSchema}[\mathsf{t}_{index}]$ はテンプレートの Constructor 引数スキーマである。
+を満たすことを要求する。CreateTx は in/out が空である必要はなく、手数料支払い・Create+Lock 同梱のために inputs/outputs を持ち得る。$\mathsf{out}$ に $\mathsf{to}=0x0$ の焼却出力を必須とする設計は採らず、仮に marker 出力を設ける場合も非合意（表示用）に限る。検証は (i) creator 認証（署名または入力所有の証明）、(ii) canonical bytes 上の TypeCheck、(iii) $\mathsf{c}_{id}$ 再計算一致を満たすことから成る。ここで $\mathsf{ArgSchema}[\mathsf{t}_{index}]$ はテンプレートの Constructor 引数スキーマである。
+DoS 対策として CreateTx に追加デポジットを必須化するのは第一選択ではなく、(i) canonical bytes 化による検証コストの一定化、(ii) 手数料市場、(iii) 状態肥大を生む Lock/Execute の規律を優先する。
 
 \subsection{LockUtxo}
-Definition 9 の LockUtxo に対応する。通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。
-出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。
-CreateContract と LockUtxo は実装上同一Txに畳めるが、概念上は分離して記述する。
+Definition 9 の LockUtxo に対応する。$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{LOCK} とし、\texttt{cid} と \texttt{lock\_payload}（ロック条件・必要なら amount 等）を含む。LockUtxo は通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。ロック出力は $\mathrm{P2CONTRACT}(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ のように $\mathsf{c}_{id}$ と状態タグに結びつく形式であり、検証規則で一致を確認する。検証は入力の正当消費、ロック出力形式の一致、および必要なら amount の整合を含む。
+CreateContract と LockUtxo は実装上同一Txに畳めるが、\texttt{tx\_type} の排他性は維持される必要がある。本稿では (i) \texttt{tx\_type=LOCK} とし、\texttt{payload\_bytes} に create 情報（\texttt{init\_params\_bytes}, \texttt{nonce} 等）を含める方式を採用案とする。将来拡張として (ii) \texttt{tx\_type=CREATE\_LOCK} の複合型を導入する方式もあり得る。
 
 \subsection{ExecuteContract}
-Locked UTXO $u^\star$ を入力として消費するトランザクション ExecuteContract $tx_\ell$ を指す。ここで $\ell$ は遷移ラベルである。
-admissible 判定は第4章の $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ に従う。
+Locked UTXO $u^\star$ を入力として消費するトランザクション ExecuteContract $tx_\ell$ を指す。ここで $\ell$ は遷移ラベルである。$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{EXECUTE} とし、\texttt{cid}、\texttt{call\_data\_bytes}（canonical）、\texttt{proof/witness}、\texttt{state\_ref} を含む。ExecuteTx は現在状態（または状態ロック）の UTXO を inputs として消費しなければならず、aux だけでは二重実行を防げないことを明示する。出力は次状態のロック UTXO を生成し、$(\mathsf{c}_{id}, \mathsf{stateTag}=s')$ で状態更新を表す。
+admissible 判定は第4章の $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ に従い、(i) consumed input が $(\mathsf{c}_{id}, \mathsf{stateTag}=s)$ に一致、(ii) 遷移検証（Pred/TransSpec）に合格、(iii) 出力が次状態仕様に一致、を満たす。
 
 継続遷移であれば $\mathsf{out}(tx)$ は次状態の $u^{\star\prime}(\dots,\mathsf{c}_{id}, \mathsf{stateTag}=s')$ を含み、終端遷移であれば受益者への通常 UTXO とお釣り等のみを含む。
 
 \subsection{FinalizeContract}
 Definition 11 で導入した確定遷移 FinalizeContract に対応する。
-期限経過 $\operatorname{after}(d)$ や $\operatorname{after}(t)$ に対応する遷移ラベル $\ell_{\mathrm{final}}$ を与え、admissibility と同じ枠組みで検証可能にする。
+期限経過 $\operatorname{after}(d)$ や $\operatorname{after}(t)$ に対応する遷移ラベル $\ell_{\mathrm{final}}$ を与え、admissibility と同じ枠組みで検証可能にする。ContractTx 共通ヘッダに従い、\texttt{tx\_type} は \texttt{FINALIZE} とする（任意）。

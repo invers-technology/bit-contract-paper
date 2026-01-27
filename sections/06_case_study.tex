@@ -36,11 +36,11 @@
 
 \paragraph{InitParams.}
 InitParams $=(m,d,t,b)$ は運営者 addrC が CreateContract（インスタンス作成）時に確定させるテンプレート固定パラメータであり、
-以後の型検証およびテンプレート検証で参照される。
+以後の型検証およびテンプレート検証で参照される。合意対象は canonical encoding された \texttt{init\_params\_bytes} とし、$ (m,d,t,b)$ はそのデコード結果として扱う。
 ここでは $0 \le b \le 1-m$ を仮定する。
-また、addrdeployer $=$ addrC として cid を導出し、例えば
+また、addrdeployer $=$ addrC とし、nonce による一意化を含めて cid を導出し、例えば
 \[
-	\mathrm{cid} := H(\mathrm{addrdeployer} \parallel \mathrm{tindex} \parallel \mathrm{InitParams})
+	\mathrm{cid} := H(\mathrm{addrdeployer} \parallel \mathrm{nonce} \parallel \mathrm{tindex} \parallel \mathrm{init\_params\_bytes})
 \]
 のように決定的に定める（同一入力から一意であることが本質）。
 

@@ -1,4 +1,4 @@
-# Bit Contracts
+# Bitcontract
 
 ## Journal
 
