@@ -27,3 +27,36 @@ IOM-CEは特定領域の運用手順を記述するためではなく、身元�
 		\bottomrule
 	\end{tabular}
 \end{table}
+
+\subsection{TLV Canonical Encoding：Test Vectors}
+本節は、Contract Transaction の TLV（Type-Length-Value）規範仕様に対する具体例を示す。
+Type 割当はプロトコル定数とし、以下の最小例を用いる。
+\begin{itemize}
+	\item \texttt{0x0001}：\texttt{proto\_version}（u16）
+	\item \texttt{0x0002}：\texttt{tx\_type}（u8；01=CREATE, 02=LOCK, 03=EXECUTE, 04=FINALIZE）
+	\item \texttt{0x0003}：\texttt{cid}（32 bytes）
+	\item \texttt{0x0004}：\texttt{t\_index}（u32）
+	\item \texttt{0x0005}：\texttt{payload\_bytes}（TLV bytes）
+\end{itemize}
+InitParams の最小例では、\texttt{0x0101}=m(u16), \texttt{0x0102}=d(u64),
+\texttt{0x0103}=t(u64), \texttt{0x0104}=b(u16) を用いる。
+
+\begin{verbatim}
+Canonical example
+init_params_bytes (hex):
+0101020001 010208000000000000000a 0103080000000000000014 0104020001
+
+aux (hex):
+0001020001 00020101 000320aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+00040400000001 0005200101020001010208000000000000000a01030800000000000000140104020001
+valid: types are sorted, no duplicates, length is canonical.
+
+Non-canonical examples (invalid)
+1) Length not canonical (proto_version length encoded with extra bytes):
+0001 820002 0001
+invalid: length is not minimal.
+
+2) Duplicate type (tx_type appears twice):
+00020101 00020102
+invalid: duplicate type.
+\end{verbatim}

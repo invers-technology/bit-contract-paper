@@ -15,16 +15,16 @@
 	\renewcommand{\arraystretch}{1.15}
 	\begin{tabularx}{0.92\linewidth}{lX}
 		\toprule
-		記号              & 意味                                                   \\
+		記号              & 意味                                                               \\
 		\midrule
-		$\mathsf{pk}_A$ & 買い手（Buyer）公開鍵                                        \\
-		$\mathsf{pk}_B$ & 販売者（Seller）公開鍵                                       \\
-		$\mathsf{pk}_C$ & 運営者（Operator / Platform）公開鍵                          \\
-		$p$             & 商品価格                                                 \\
-		$m$             & マージン率                                                \\
-		$d$             & 配送期間（Delivered 判定の想定期間）                              \\
-		$t$             & コントラクト・タイムアウト（$t \ge d$）                             \\
-		$b$             & FinalizeContract 報酬率（bounty rate, $0 \le b \le 1-m$） \\
+		$\mathsf{pk}_A$ & 買い手（Buyer）公開鍵                                                    \\
+		$\mathsf{pk}_B$ & 販売者（Seller）公開鍵                                                   \\
+		$\mathsf{pk}_C$ & 運営者（Operator / Platform）公開鍵                                      \\
+		$p$             & 商品価格                                                             \\
+		$m$             & マージン率                                                            \\
+		$d$             & 配送期限（Unix epoch seconds）                                         \\
+		$t$             & コントラクト・タイムアウト（Unix epoch seconds, $t \ge d$）                     \\
+		$b$             & Finalize の liveness reward（bounty amount、契約ごとに InitParams でコミット） \\
 		\bottomrule
 	\end{tabularx}
 	\caption{Escrow ケーススタディで用いる記号}
@@ -34,18 +34,24 @@
 \subsection{Instance Parameters (InitParams / LockParams)}
 \label{subsec:escrow-params}
 
-\paragraph{InitParams.}
+\paragraph{InitParams}
 InitParams $=(m,d,t,b)$ は運営者 $\mathsf{pk}_C$ が CreateContract（インスタンス作成）時に確定させるテンプレート固定パラメータであり、
 以後の型検証およびテンプレート検証で参照される。
 合意対象は canonical encoding された \texttt{init\_params\_bytes} とし、$ (m,d,t,b)$ はそのデコード結果として扱う。
-ここでは $0 \le b \le 1-m$ を仮定する。
-また、$\mathsf{pk}_{\mathrm{from}} = \mathsf{pk}_C$ とし、CreateContract の $\mathrm{txid}$ と $\mathrm{nonce}$ による一意化を含めて cid を導出し、例えば
+$d,t$ は Unix epoch seconds の整数として扱う。
+Bitcoin の locktime が値域によりブロック高／Unix time を切り替えるのに対し、本稿では Unix time に固定する。
+$b$ は期限後の Finalize を第三者に実行させるための liveness reward であり、返金・精算の正当性とは独立である。
+$b$ は契約ごとに Create 時点でコミットする。
+プロトコルは $b_{\min} \le b \le b_{\max}$ の範囲や $b=\min(b_{\mathrm{cap}},\lfloor \alpha \cdot p \rfloor)$ のような比率＋上限を課すことで、恣意・DoSを抑制できる。
+ここで $b_{\min}, b_{\max}, b_{\mathrm{cap}}, \alpha$ はプロトコル定数（合意規則）として固定される。
+Finalize $tx$ の手数料は別途確保され、$b$ は追加の誘因として扱う。
+また、$\mathsf{pk}_{\mathrm{from}} = \mathsf{pk}_C$ とし、CreateContract の $\mathsf{tx}_{id}$ により cid を導出し、例えば
 \[
-	\mathrm{cid} := H(\mathrm{txid} \parallel \mathsf{pk}_{\mathrm{from}} \parallel \mathrm{nonce} \parallel \mathrm{tindex} \parallel \mathrm{init\_params\_bytes})
+	\mathrm{cid} := H(\mathsf{tx}_{id} \parallel \mathsf{pk}_{\mathrm{from}} \parallel \mathsf{t}_{index} \parallel \mathrm{init\_params\_bytes})
 \]
 のように決定的に定める（同一入力から一意であることが本質）。
 
-\paragraph{LockParams.}
+\paragraph{LockParams}
 LockParams $=(\mathsf{pk}_B,p)$ は買い手 $\mathsf{pk}_A$ が BuyerLock により資金拘束（LockUtxo）を開始する際に与える。
 販売者公開鍵 $\mathsf{pk}_B$ と価格 $p$ を指定し、以降の支払い先・返金先の整合性検証に用いる。
 
@@ -54,6 +60,8 @@ LockParams $=(\mathsf{pk}_B,p)$ は買い手 $\mathsf{pk}_A$ が BuyerLock に�
 
 テンプレートが取りうる状態タグ（stateTag）は $S0,S0D,S0X,S0C,S1,S2$ である。
 stateTag は $u^\star$ に付随する唯一の共有状態語彙として扱う。
+表\ref{tab:escrow-transitions} の各行は $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ の具体例である。
+ここで $\operatorname{after}(d), \operatorname{after}(t)$ は $\mathsf{chain\_time} \ge d,t$ を意味し、$\mathsf{chain\_time}$ は合意的時刻（例：MTP）として評価する。
 
 \begin{table*}[t]
 	\centering
@@ -62,77 +70,77 @@ stateTag は $u^\star$ に付随する唯一の共有状態語彙として扱う
 	\renewcommand{\arraystretch}{1.15}
 	\begin{tabularx}{\textwidth}{l l l l l X}
 		\toprule
-		遷移ラベル $\ell$                                                   & 前状態 & 起動者 & 認証/条件 & 次状態 & 効果（主な出力・更新）                \\
+		遷移ラベル $\ell$                                                   & 前状態 & 起動者 & 認証/条件 & 次状態 & 効果（主な出力・更新）                 \\
 		\midrule
 		BuyerLock                                                      &
 		--                                                             &
 		$\mathsf{pk}_A$                                                &
 		$\sigma_A$                                                     &
 		$S0$                                                           &
-		$p$ を拘束し $u^\star(\mathrm{cid},\mathrm{stateTag}{=}S0)$ を生成                                                           \\
+		$p$ を拘束し $u^\star(\mathrm{cid},\mathrm{stateTag}{=}S0)$ を生成                                                            \\
 
 		SellerDeliver                                                  &
 		$S0$                                                           &
 		$\mathsf{pk}_B$                                                &
 		$\sigma_B$                                                     &
 		$S0D$                                                          &
-		$\mathrm{stateTag}{=}S0D$ に更新（ロック継続）                                                                                  \\
+		$\mathrm{stateTag}{=}S0D$ に更新（ロック継続）                                                                                   \\
 
 		BuyerConfirm                                                   &
 		$S0/S0D$                                                       &
 		$\mathsf{pk}_A$                                                &
 		$\sigma_A$                                                     &
 		$S1$                                                           &
-		$p(1-m-b)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C,\; pb\rightarrow \mathsf{pk}_A$（bounty は Buyer に帰属） \\
+		$(p(1-m)-b)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C,\; b\rightarrow \mathsf{pk}_A$（bounty は Buyer に帰属） \\
 
 		FinalizeContract                                               &
 		$S0/S0D$                                                       &
 		Anyone                                                         &
 		$\operatorname{after}(d)$                                      &
 		$S1$                                                           &
-		$p(1-m-b)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C,\; pb\rightarrow \mathsf{pk}_F$（bounty は起動者に帰属）     \\
+		$(p(1-m)-b)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C,\; b\rightarrow \mathsf{pk}_F$（bounty は起動者に帰属）     \\
 
 		BuyerDispute                                                   &
 		$S0D$                                                          &
 		$\mathsf{pk}_A$                                                &
 		$\sigma_A$                                                     &
 		$S0X$                                                          &
-		$\mathrm{stateTag}{=}S0X$ に更新（ロック継続）                                                                                  \\
+		$\mathrm{stateTag}{=}S0X$ に更新（ロック継続）                                                                                   \\
 
 		OperatorMediateRelease                                         &
 		$S0X$                                                          &
 		$\mathsf{pk}_C+(\mathsf{pk}_A/\mathsf{pk}_B)$                  &
 		$\sigma_C$ と $(\sigma_A\ \mathrm{or}\ \sigma_B)$               &
 		$S1$                                                           &
-		$p(1-m)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C$                                                      \\
+		$p(1-m)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C$                                                       \\
 
 		OperatorMediateRefund                                          &
 		$S0X$                                                          &
 		$\mathsf{pk}_C+(\mathsf{pk}_A/\mathsf{pk}_B)$                  &
 		$\sigma_C$ と $(\sigma_A\ \mathrm{or}\ \sigma_B)$               &
 		$S2$                                                           &
-		$p\rightarrow \mathsf{pk}_A$                                                                                          \\
+		$p\rightarrow \mathsf{pk}_A$                                                                                           \\
 
 		BuyerCancel                                                    &
 		$S0/S0D$                                                       &
 		$\mathsf{pk}_A$                                                &
 		$\sigma_A$                                                     &
 		$S0C$                                                          &
-		$\mathrm{stateTag}{=}S0C$ に更新（ロック継続）                                                                                  \\
+		$\mathrm{stateTag}{=}S0C$ に更新（ロック継続）                                                                                   \\
 
 		SellerAcceptCancel                                             &
 		$S0C$                                                          &
 		$\mathsf{pk}_B$                                                &
 		$\sigma_B$                                                     &
 		$S2$                                                           &
-		$p\rightarrow \mathsf{pk}_A$                                                                                          \\
+		$p\rightarrow \mathsf{pk}_A$                                                                                           \\
 
 		ContractTimeout                                                &
 		$S0/S0D/S0X/S0C$                                               &
 		Anyone                                                         &
 		$\mathrm{timeout\_condition}(\mathrm{stateTag})=\mathrm{true}$ &
 		$S2$                                                           &
-		$p\rightarrow \mathsf{pk}_A$                                                                                          \\
+		$p\rightarrow \mathsf{pk}_A$                                                                                           \\
 		\bottomrule
 	\end{tabularx}
 	\caption{Escrow テンプレートの遷移仕様（検証条件・次状態・支払い）}
@@ -142,7 +150,7 @@ stateTag は $u^\star$ に付随する唯一の共有状態語彙として扱う
 \subsection{LogicSet, Pred, and TransSpec}
 \label{subsec:escrow-logics}
 
-第4章の定義（テンプレート $\tau=(\mathrm{tindex},\mathrm{InitParams},\mathrm{LockParams},\mathrm{StateSet},\mathrm{LogicSet},\mathrm{TransSpec})$）に従う。
+第4章の定義（テンプレート $\tau=(\mathsf{t}_{index},\mathrm{InitParams},\mathrm{LockParams},\mathrm{StateSet},\mathrm{LogicSet},\mathrm{TransSpec})$）に従う。
 本節では重複を避けるため、LogicSet の具体は表\ref{tab:escrow-transitions} で一括して与える。
 すなわち、各遷移 $\ell$ について
 \[
@@ -164,4 +172,4 @@ stateTag は $u^\star$ に付随する唯一の共有状態語彙として扱う
 $S0/S0D$ は BuyerConfirm もしくは $\operatorname{after}(d)$ 到来後の FinalizeContract により $S1$ へ確定する。
 $S0X$ は仲裁（OperatorMediateRelease/Refund）で $S1/S2$ に到達し、最終的には
 $\mathrm{timeout\_condition}(\mathrm{stateTag})=\mathrm{true}$ の ContractTimeout により $S2$ に到達する。
-さらに FinalizeContract は誰でも実行可能で bounty（$pb$）が起動者 $\mathsf{pk}_F$ に帰属するため、期限到来後に実行されやすい。
+さらに FinalizeContract は誰でも実行可能で bounty（$b$）が起動者 $\mathsf{pk}_F$ に帰属するため、期限到来後に実行されやすい。
