@@ -3,12 +3,16 @@
 
 本稿は 汎用 VM による任意計算と広範な mutable global state、すなわち共有可変ストレージを採用しない。
 代わりに、コントラクトは テンプレート（template）として事前に制約され、インスタンス化はテンプレート参照と引数によって与えられる。
-共有される状態は $\mathsf{stateTag}$ に限定し、テンプレートが定める有限ラベルとしてグローバルに解釈される唯一の状態語彙とする。必要であればテンプレート集合や参照情報は immutable global registryとして保持し得る。これは不変レジストリであり、R4 に整合する。
+共有される状態は $\mathsf{stateTag}$ に限定し、テンプレートが定める有限ラベルとしてグローバルに解釈される唯一の状態語彙とする。
+必要であればテンプレート集合や参照情報は immutable global registryとして保持し得る。
+これは不変レジストリであり、R4 に整合する。
 
 本章は「一般形式（general form）」までを与え、ユースケース適用は次章でテンプレート群（deposit/release/refund）として具体化する。
 
 \subsection{Notation and Conventions}
-$\parallel$ は連結（concatenation）を表し、$H(\cdot)$ は暗号学的ハッシュ関数を表す。記号の使い分けとして、$\mathsf{index}$ はインクリメントされる自然数の添字（例：outpoint の $i$、テンプレート参照の $\mathsf{t}_{index}$）を指し、$\mathsf{id}$ はハッシュ関数等で導出される識別子（例：$\mathsf{tx}_{id}, \mathsf{c}_{id}$）を指す。$\mathsf{Addr}$ はアドレス集合であり、$\mathsf{addr} \in \mathsf{Addr}$ は P2PKH などの通常アドレスや script-hash 的な識別子を抽象化したものである（実装上は script/commitment/metadata に埋め込める）。
+$\parallel$ は連結（concatenation）を表し、$H(\cdot)$ は暗号学的ハッシュ関数を表す。
+記号の使い分けとして、$\mathsf{index}$ はインクリメントされる自然数の添字（例：outpoint の $i$、テンプレート参照の $\mathsf{t}_{index}$）を指し、$\mathsf{id}$ はハッシュ関数等で導出される識別子（例：$\mathsf{tx}_{id}, \mathsf{c}_{id}$）を指す。
+$\mathsf{Addr}$ はアドレス集合であり、$\mathsf{addr} \in \mathsf{Addr}$ は P2PKH などの通常アドレスや script-hash 的な識別子を抽象化したものである（実装上は script/commitment/metadata に埋め込める）。
 
 \subsection{UTXO ステートマシン}
 本節は Bitcoin の Script や補助入力構造を忠実に再現しない。UTXO 集合と遷移として抽象化し、テンプレート参照・状態タグ・検証述語・出力仕様に必要な最小要素のみを定義する。署名検証等の基礎規則は抽象述語 $\mathsf{BaseValid}$ にまとめる。
@@ -20,8 +24,8 @@ Outpoint を $\mathsf{op}=(\mathsf{tx}_{id}, i)$ とし、UTXO を次で表す�
 \begin{equation}
 	u^\star=(\mathsf{op}, v, \mathsf{addr}, \mathsf{c}_{id}, \mathsf{stateTag})
 \end{equation}
-ここで $v$ は額面、$\mathsf{addr}$ は所有者（支出権限）を表すアドレス、$u$ は通常 UTXO、$u^\star$ はテンプレート参照と状態タグを伴う Locked UTXO である。
-\textbf{実装上は、$(\mathsf{c}_{id}, \mathsf{stateTag})$ は script / aux / commitment / metadata に埋め込まれ得る抽象化であり、UTXO に独立の data 欄があることを仮定しない。$\mathsf{addr}$ についても同様に埋め込み可能である。}
+ここで $v$ は額面、$\mathsf{addr}$ は所有者（支出権限）を表すアドレス、$u$ は通常 UTXO、$u^\star$ はテンプレート参照と状態タグを伴うロック状態の UTXO である。
+\textbf{実装上は、$(\mathsf{c}_{id}, \mathsf{stateTag})$ はトランザクションの $\mathsf{aux}$ に埋め込まれ得る抽象化であり、UTXO に独立のフィールドがあることを仮定しない。}
 （Bitcoin Script 相当では $(\mathsf{c}_{id}, \mathsf{stateTag})$ を script/commitment/metadata として埋め込める。eUTXO では datum として扱える。）
 
 \paragraph{Definition 2：台帳状態}
@@ -36,7 +40,9 @@ Outpoint を $\mathsf{op}=(\mathsf{tx}_{id}, i)$ とし、UTXO を次で表す�
 \begin{equation}
 	tx := (\mathsf{in}, \mathsf{out}, \mathsf{aux})
 \end{equation}
-とする。$\mathsf{in}$ は入力 outpoint 列 $\mathsf{in}:=[\mathsf{op}_j]$、$\mathsf{out}$ は出力 UTXO 列、$\mathsf{aux}$ は署名・期限情報など検証に必要な補助入力である。Bitcoinと同様に、本稿のトランザクションは from/to アドレスを明示的なフィールドとして含まない。
+とする。$\mathsf{in}$ は入力 outpoint 列 $\mathsf{in}:=[\mathsf{op}_j]$、$\mathsf{out}$ は出力 UTXO 列、$\mathsf{aux}$ は署名・期限情報など検証に必要な補助入力である。
+Bitcoinと同様に、本稿のトランザクションは from/to アドレスを明示的なフィールドとして含まない。
+本稿で $\mathsf{addr}_{\mathrm{from}}$ と記す場合は、入力 UTXO の所有者（消費権限の主体）を指す略記であり、明示フィールドではなく入力の検証から同定される。
 
 \paragraph{ContractTx 共通ヘッダ（aux）}
 本稿で扱う ContractTx の $\mathsf{aux}$ は canonical encoding された byte 列とし、少なくとも
@@ -81,7 +87,7 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 	\item $\mathsf{Trans}$：条件成立時に許される出力形（prescribed transition / template）。出力が任意ではなく、テンプレートで上限付きに規定される（R3）。
 \end{itemize}
 
-\subsection{オンチェーン対象：Template / Contract Instance / Locked UTXO}
+\subsection{オンチェーン対象：Template / Contract Instance / $u^\star$}
 本稿の対象を、“状態として何が増えるか”が明確になるように、次の 3 層に整理する。
 
 \paragraph{Definition 6：Template：普遍}
@@ -111,32 +117,41 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 \begin{equation}
 	I := (\mathsf{c}_{id}, \mathsf{t}_{index}, \vec{a})
 \end{equation}
-で表す。$\vec{a}=(a_1,\dots,a_k)$ は $\mathsf{InitParams}$ に対応する初期化引数列であり、CreateContract の Constructor 引数として $\mathsf{InitParams}$ を初期化し、以後は更新されない。$\vec{a}$ は canonical encoding された \texttt{init\_params\_bytes} のデコード結果であり、合意対象は byte 列そのものとする。当事者集合（例：Buyer/Seller/Operator）や必要情報は $\vec{a}$ に含まれる前提とするため、$\mathsf{participants}$ のような別フィールドは置かない。コントラクトインスタンスの内部変数（$\mathsf{InitParams}$）は、CreateContract によって生成された際から不変である。
+で表す。
+$\vec{a}=(a_1,\dots,a_k)$ は $\mathsf{InitParams}$ に対応する初期化引数列であり、CreateContract の Constructor 引数として $\mathsf{InitParams}$ を初期化し、以後は更新されない。
+$\vec{a}$ は canonical encoding された \texttt{init\_params\_bytes} のデコード結果であり、合意対象は byte 列そのものとする。
+（例：Buyer/Seller/Operator）や必要情報は $\vec{a}$ に含まれる前提とするため、$\mathsf{participants}$ のような別フィールドは置かない。
+コントラクトインスタンスの内部変数（$\mathsf{InitParams}$）は、CreateContract によって生成された際から不変である。
 $\mathsf{c}_{id}$ は決定的に導出される識別子であり、例えば
 \begin{equation}
-	\mathsf{c}_{id} := H(\mathsf{addr}_{\mathrm{deployer}} \parallel \mathsf{nonce} \parallel \mathsf{t}_{index} \parallel \mathsf{init\_params\_bytes})
+	\mathsf{c}_{id} := H(\mathsf{tx}_{id} \parallel \mathsf{addr}_{\mathrm{from}} \parallel \mathsf{nonce} \parallel \mathsf{t}_{index} \parallel \mathsf{init\_params\_bytes})
 \end{equation}
-のように作れる（重要なのは同一入力から一意であること）。ここで $\mathsf{addr}_{\mathrm{deployer}}$ は CreateContract/LockUtxo を作成する主体（デプロイヤ／作成者）のアドレスであり、$\mathsf{nonce}$ は衝突回避のための一意化要素である。これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（R2, R3）。
+のように作れる（重要なのは同一入力から一意であること）。
+ここで $\mathsf{tx}_{id}$ は CreateContract トランザクションの ID、$\mathsf{addr}_{\mathrm{from}}$ は CreateContract/LockUtxo を作成する主体の \textbf{from（送信元）} アドレス（入力 UTXO の所有者アドレス）であり、$\mathsf{nonce}$ は衝突回避のための一意化要素である。
+これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（R2, R3）。
 
-\paragraph{Definition 8：Locked UTXO：型付き状態}
-Locked UTXO は、単なる script 断片ではなくテンプレート参照と状態タグを伴う型付き状態である、という設計選好を仕様として固定する。
-Locked UTXO $u^\star$（Definition 1）において、$\mathsf{c}_{id}$ は参照先インスタンス、$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）であり、対応するテンプレート $\tau$ の $\mathsf{StateSet}_\tau$ に属する。本稿では $\mathsf{stateTag}$ を共有される唯一のグローバルステートとして扱う。
+\paragraph{Definition 8：$u^\star$：型付き状態}
+$u^\star$ は、単なる script 断片ではなくテンプレート参照と状態タグを伴う型付き状態である、という設計選好を仕様として固定する。
+$u^\star$（Definition 1）において、$\mathsf{c}_{id}$ は参照先インスタンス、$\mathsf{stateTag}$ はテンプレートが定める有限個の状態ラベル（例：$S0, S0D, S0X$）であり、対応するテンプレート $\tau$ の $\mathsf{StateSet}_\tau$ に属する。本稿では $\mathsf{stateTag}$ を共有される唯一のグローバルステートとして扱う。
 実装上の埋め込みは Definition 1 の注記に同じであり、独立の状態欄を仮定しない。
 これにより「条件を script 断片に依存させる」から、「状態タグとテンプレート参照により検証する」へと、監査可能性が上限付きの表現に移る。
 
 \subsection{遷移規則：CreateContract / LockUtxo / Release / FinalizeContract と Admissibility}
-本節では、Locked UTXO を生成・消費する遷移の妥当性を admissibility、すなわち許容条件として定義する。要件は「外部裁量ではなく検証可能」＝決定的 admissibility である（R2）。
+本節では、$u^\star$ を生成・消費する遷移の妥当性を admissibility、すなわち許容条件として定義する。要件は「外部裁量ではなく検証可能」＝決定的 admissibility である（R2）。
 
 \paragraph{Definition 9：CreateContract / LockUtxo}
 \begin{itemize}
-	\item CreateContract：$\Gamma$ 内のテンプレート $\mathsf{t}_{index}$ と \texttt{init\_params\_bytes}、および $\mathsf{addr}_{\mathrm{deployer}}$ と $\mathsf{nonce}$ を参照し、$\mathsf{c}_{id}$ を生成するトランザクションである。ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{CREATE} とする。
-	\item LockUtxo：通常 UTXO $u$ を消費し、Locked UTXO $u^\star$ を出力する。LockUtxo はインスタンス化された $\mathsf{c}_{id}$ に対して送信され、$\mathsf{stateTag}$ を初期状態に持つ $u^\star$ を生成する。出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。ここで $s_{\mathrm{init}} \in \mathsf{StateSet}_\tau$ はテンプレートが定める初期状態である。ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{LOCK} とする。
+	\item CreateContract：$\Gamma$ 内のテンプレート $\mathsf{t}_{index}$ と \texttt{init\_params\_bytes}、および $\mathsf{tx}_{id}$・$\mathsf{addr}_{\mathrm{from}}$・$\mathsf{nonce}$ を参照し、$\mathsf{c}_{id}$ を生成するトランザクションである。ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{CREATE} とする。
+	\item LockUtxo：通常 UTXO $u$ を消費し、$u^\star$ を出力する。LockUtxo はインスタンス化された $\mathsf{c}_{id}$ に対して送信され、$\mathsf{stateTag}$ を初期状態に持つ $u^\star$ を生成する。出力には $(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ が付与される。ここで $s_{\mathrm{init}} \in \mathsf{StateSet}_\tau$ はテンプレートが定める初期状態である。ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{LOCK} とする。
 \end{itemize}
 
 \paragraph{Definition 10：Release / Transition}
-Locked UTXO $u^\star$ を入力として消費するトランザクションを contract transition tx と呼ぶ。
-特に ExecuteContract は contract transition tx の一種であり、$\mathsf{c}_{id}$ と関数 index（LogicIndex）$\ell$、および引数 $\mathsf{args}$ をフィールドとして持つ（例：$\mathsf{aux}$ 内に格納）。ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{EXECUTE} とし、\texttt{state\_ref} と \texttt{call\_data\_bytes}（canonical）を含む。ExecuteContract は対応する Locked UTXO を入力として消費し、その消費により一回性を担保する（aux だけでの担保は不可）。さらに、$\mathsf{c}_{id}$ から対応する Locked UTXO を取得し、$(\ell, \mathsf{args})$ から $\mathsf{modifier}_\ell$ と $\mathsf{validation}_\ell$ を取得して双方の検証を行い、通過した場合に $u^\star$ の $\mathsf{stateTag}$ を更新する。
-つまり、ExecuteContract トランザクションは Locked UTXO の状態遷移を命令するものであり、テンプレートはその検証機として働く。
+$u^\star$ を入力として消費するトランザクションを contract transition $tx$ と呼ぶ。
+特に ExecuteContract は contract transition $tx$ の一種であり、$\mathsf{c}_{id}$ と関数 index（LogicIndex）$\ell$、および引数 $\mathsf{args}$ をフィールドとして持つ（例：$\mathsf{aux}$ 内に格納）。
+ContractTx 共通ヘッダに従い、$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{EXECUTE} とし、\texttt{state\_ref} と \texttt{call\_data\_bytes}（canonical）を含む。
+ExecuteContract は対応する $u^\star$ を入力として消費し、その消費により一回性を担保する（$\mathsf{aux}$ だけでの担保は不可）。
+さらに、$\mathsf{c}_{id}$ から対応する $u^\star$ を取得し、$(\ell, \mathsf{args})$ から $\mathsf{modifier}_\ell$ と $\mathsf{validation}_\ell$ を取得して双方の検証を行い、通過した場合に $u^\star$ の $\mathsf{stateTag}$ を更新する。
+つまり、ExecuteContract トランザクションは $u^\star$ の状態遷移を命令するものであり、テンプレートはその検証機として働く。
 ここで $\ell$ はテンプレートが定める LogicIndex であり、遷移ラベルとして用いる。型注釈として、
 \begin{equation}
 	\mathsf{Pred}_{\tau,\ell} : \Sigma \times \mathsf{Tx} \times \mathsf{CID} \to \{\mathsf{true}, \mathsf{false}\}
