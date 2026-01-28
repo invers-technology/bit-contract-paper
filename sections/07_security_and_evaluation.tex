@@ -2,6 +2,34 @@
 
 \subsection{Threat Model and Trust Assumption}
 
+\begin{itemize}
+	\item 誰が悪い行為者になり得るか（Buyer/Seller/Operator、共謀の範囲）
+	\item 何ができるか（署名偽造は不可、検閲・遅延・不作為は可能、など）
+	\item チェーン側前提（タイムロック可否、最終性、手数料市場の揺れの扱い）
+\end{itemize}
+
 \subsection{Security Property}
 
+\begin{itemize}
+	\item Claim/Theorem（何が保証されるか野太く1行）
+	\item Proof sketch（テンプレート検証規則／遷移表からなぜ排除されるか）
+\end{itemize}
+
+\begin{itemize}
+	\item 横領が 何を意味するか（禁止したい遷移）
+	\item それが なぜテンプレート検証で排除されるか（検証条件）
+	\item それでも残る 攻撃面（検閲、遅延、共謀、外部決済等）
+\end{itemize}
+
 \subsection{Implementation and Evaluation}
+
+\begin{itemize}
+	\item 実装対象と再現性：どのチェーン/VM/ライブラリで、どのコミットで再現できるか（生成器・検証器・テスト手順）
+	\item コスト評価：各遷移トランザクションのサイズ/手数料（感度分析も）
+	\item 比較：同等機能の一般的スマコン（EVM等）に対して、監査対象・状態依存・実行失敗モードがどう減るか（表で）
+\end{itemize}
+
+評価で出す数値（サイズ、手数料、計算量、必要署名数、オンチェーン状態量）が、
+5章で定義したトランザクション構造
+6章のトランザクション列
+に対して算出された、と追跡できる必要があります。

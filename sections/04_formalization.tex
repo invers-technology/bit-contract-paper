@@ -133,6 +133,7 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 本稿ではテンプレート $\tau$ を記述する DSL として Computational Law DSL である Stipula を採用する。
 Stipula は自然言語的な契約条項を $\mathsf{Pred}$ および各遷移に対応する $\mathsf{TransSpec}$ として形式化し、検証者が $tx$ を見て一意に判定できる決定的条件（R2）として与える。
 また、テンプレート制約による監査上限（R3）を、実装規律ではなく仕様記述の表現力として固定できる点が Stipula 採用の理由である。
+さらに、この制約は、利用者が署名時点で取引意味と遷移結果を点検できる（予測可能性を確保する）ための条件でもある。したがって本稿は、任意コードの汎用VM実装ではなく、テンプレートとして列挙可能な範囲に契約を閉じることを設計原理とする。
 UTXO は実行モデル、Stipula はテンプレート仕様の記述層として位置づけられ、$\mathsf{stateTag}$ と不変レジストリ $\Gamma$ 以外の共有状態を増やさない。
 $\Gamma$ は fixed protocol version $\mathsf{v}_{\mathrm{proto}}$ に対するコンセンサス定数であり、$\Sigma$ の通常遷移では変化しない。
 $\Gamma$ の変更はアプリ層の差替えではなく、合意形成を伴うプロトコル更新としてのみ許容される（本稿は $\mathsf{v}_{\mathrm{proto}}$ を固定して安全性を論じる）。
