@@ -36,7 +36,8 @@ Type 割当はプロトコル定数とし、以下の最小例を用いる。
 	\item \texttt{0x0002}：\texttt{tx\_type}（u8；01=CREATE, 02=LOCK, 03=EXECUTE, 04=FINALIZE）
 	\item \texttt{0x0003}：\texttt{cid}（32 bytes）
 	\item \texttt{0x0004}：\texttt{t\_index}（u32）
-	\item \texttt{0x0005}：\texttt{payload\_bytes}（TLV bytes）
+	\item \texttt{0x0005}：\texttt{l\_index}（u32）
+	\item \texttt{0x0006}：\texttt{args}（TLV bytes）
 \end{itemize}
 InitParams の最小例では、\texttt{0x0101}=m(u16), \texttt{0x0102}=d(u64),
 \texttt{0x0103}=t(u64), \texttt{0x0104}=b(u16) を用いる。
@@ -48,7 +49,7 @@ init_params_bytes (hex):
 
 aux (hex):
 0001020001 00020101 000320aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-00040400000001 0005200101020001010208000000000000000a01030800000000000000140104020001
+00040400000001 0006200101020001010208000000000000000a01030800000000000000140104020001
 valid: types are sorted, no duplicates, length is canonical.
 
 Non-canonical examples (invalid)
