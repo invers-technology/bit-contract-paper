@@ -18,17 +18,23 @@
 	\renewcommand{\arraystretch}{1.15}
 	\begin{tabularx}{0.92\linewidth}{lX}
 		\toprule
-		記号              & 意味                                                               \\
+		記号              & 意味                                                           \\
 		\midrule
-		$\mathsf{pk}_A$ & 買い手（Buyer）公開鍵                                                    \\
-		$\mathsf{pk}_B$ & 販売者（Seller）公開鍵                                                   \\
-		$\mathsf{pk}_C$ & 運営者（Operator / Platform）公開鍵                                      \\
-		$\mathsf{pk}_M$ & マイナー（block producer）公開鍵                                          \\
-		$p$             & 商品価格                                                             \\
-		$m$             & マージン率                                                            \\
-		$d$             & 配送期限（Unix epoch seconds）                                         \\
-		$t$             & コントラクト・タイムアウト（Unix epoch seconds, $t \ge d$）                     \\
-		$b$             & Finalize の liveness reward（bounty amount、契約ごとに InitParams でコミット） \\
+		$\mathsf{pk}_A$ & 買い手（Buyer）公開鍵                                                \\
+		$\mathsf{pk}_B$ & 販売者（Seller）公開鍵                                               \\
+		$\mathsf{pk}_C$ & 運営者（Operator / Platform）公開鍵                                  \\
+		$\mathsf{pk}_F$ & Finalizer（\textsf{FinalizeTx} 発行者）公開鍵                        \\
+		$p$             & 商品価格                                                         \\
+		$V$             & escrow の principal 金額（当事者間移転額、operator fee を除外；本ケースでは $V=p$） \\
+		$m$             & マージン率                                                        \\
+		$d$             & 配送期限（Unix epoch seconds）                                     \\
+		$t$             & コントラクト・タイムアウト（Unix epoch seconds, $t \ge d$）                 \\
+		$\alpha_b$      & Finalize incentive rate（$b(V)$ の比率パラメータ）                     \\
+		$b_{\min}$      & Finalize incentive の下限                                       \\
+		$b_{\max}$      & Finalize incentive の上限                                       \\
+		$b(V)$          & Finalize incentive（principal $V$ に依存する bounty）               \\
+		$F_{\max}$      & Fee reserve の上限                                              \\
+		$R(V)$          & FeeReserve の予約額（$R(V)=b(V)+F_{\max}$）                        \\
 		\bottomrule
 	\end{tabularx}
 	\caption{Escrow ケーススタディで用いる記号}
@@ -39,16 +45,13 @@
 \label{subsec:escrow-params}
 
 \paragraph{InitParams}
-InitParams $=(m,d,t,b)$ は運営者 $\mathsf{pk}_C$ が CreateContract（インスタンス作成）時に確定させるテンプレート固定パラメータであり、
+InitParams $=(m,d,t)$ は運営者 $\mathsf{pk}_C$ が CreateContract（インスタンス作成）時に確定させるテンプレート固定パラメータであり、
 以後の型検証およびテンプレート検証で参照される。
-合意対象は canonical encoding された \texttt{init\_params\_bytes} とし、$ (m,d,t,b)$ はそのデコード結果として扱う。
+合意対象は canonical encoding された \texttt{init\_params\_bytes} とし、$ (m,d,t)$ はそのデコード結果として扱う。
 $d,t$ は Unix epoch seconds の整数として扱う。
 Bitcoin の locktime が値域によりブロック高／Unix time を切り替えるのに対し、本稿では Unix time に固定する。
-$b$ は期限後の Finalize を第三者に実行させるための liveness reward であり、返金・精算の正当性とは独立である。
-$b$ は契約ごとに Create 時点でコミットする。
-プロトコルは $b_{\min} \le b \le b_{\max}$ の範囲や $b=\min(b_{\mathrm{cap}},\lfloor \alpha \cdot p \rfloor)$ のような比率＋上限を課すことで、恣意・DoSを抑制できる。
-ここで $b_{\min}, b_{\max}, b_{\mathrm{cap}}, \alpha$ はプロトコル定数（合意規則）として固定される。
-Finalize $tx$ の手数料は別途確保され、$b$ は追加の誘因として扱う。
+Finalize の誘因は定数 $b$ ではなく $b(V)$ とし、定義は第4章の $b(V)$ を用いる。
+さらに FeeReserve は $R(V)=b(V)+F_{\max}$ として operator-side fee budget から確保し、principal $V$ を削らない。
 また、$\mathsf{pk}_{\mathrm{from}} = \mathsf{pk}_C$ とし、CreateContract の $\mathsf{tx}_{id}$ により $c_{id}$ を導出し、例えば
 \[
 	c_{id} := H(\mathsf{tx}_{id} \parallel \mathsf{pk}_{\mathrm{from}} \parallel \mathsf{t}_{index} \parallel \mathrm{init\_params\_bytes})
@@ -74,77 +77,77 @@ stateTag は $u^\star$ に付随する唯一の共有状態語彙として扱う
 	\renewcommand{\arraystretch}{1.15}
 	\begin{tabularx}{\textwidth}{l l l l l X}
 		\toprule
-		遷移ラベル $\ell$                                                                                   & 前状態 & 起動者 & 認証/条件 & 次状態 & 効果（主な出力・更新） \\
+		遷移ラベル $\ell$                                                   & 前状態 & 起動者 & 認証/条件 & 次状態 & 効果（主な出力・更新） \\
 		\midrule
-		BuyerLock                                                                                      &
-		--                                                                                             &
-		$\mathsf{pk}_A$                                                                                &
-		$\sigma_A$                                                                                     &
-		$S0$                                                                                           &
-		$p$ を拘束し $u^\star(c_{id},\mathrm{stateTag}{=}S0)$ を生成                                                                                  \\
+		BuyerLock                                                      &
+		--                                                             &
+		$\mathsf{pk}_A$                                                &
+		$\sigma_A$                                                     &
+		$S0$                                                           &
+		$p$ を拘束し $u^\star(c_{id},\mathrm{stateTag}{=}S0)$ を生成                                                  \\
 
-		SellerDeliver                                                                                  &
-		$S0$                                                                                           &
-		$\mathsf{pk}_B$                                                                                &
-		$\sigma_B$                                                                                     &
-		$S0D$                                                                                          &
-		$\mathrm{stateTag}{=}S0D$ に更新（ロック継続）                                                                                                   \\
+		SellerDeliver                                                  &
+		$S0$                                                           &
+		$\mathsf{pk}_B$                                                &
+		$\sigma_B$                                                     &
+		$S0D$                                                          &
+		$\mathrm{stateTag}{=}S0D$ に更新（ロック継続）                                                                   \\
 
-		BuyerConfirm                                                                                   &
-		$S0/S0D$                                                                                       &
-		$\mathsf{pk}_A$                                                                                &
-		$\sigma_A \wedge \sigma_B$                                                                     &
-		$S1$                                                                                           &
-		$p(1-m)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C$                                                                       \\
+		BuyerConfirm                                                   &
+		$S0/S0D$                                                       &
+		$\mathsf{pk}_A$                                                &
+		$\sigma_A \wedge \sigma_B$                                     &
+		$S1$                                                           &
+		$p(1-m)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C$                                       \\
 
-		FinalizeContract                                                                               &
-		$S0/S0D$                                                                                       &
-		Anyone                                                                                         &
-		$(\sigma_A \vee \sigma_B) \wedge \operatorname{after}(d)$                                      &
-		$S1/S2$                                                                                        &
-		$\mathrm{stateTag}$ に応じた支払（下記の支払マップ）                                                                                                   \\
+		FinalizeContract                                               &
+		$S0/S0D$                                                       &
+		Anyone                                                         &
+		$\operatorname{after}(d)$                                      &
+		$S1/S2$                                                        &
+		$\mathrm{stateTag}$ に応じた支払＋FeeReserve から $b(V)\rightarrow \mathsf{pk}_F$                               \\
 
-		BuyerDispute                                                                                   &
-		$S0D$                                                                                          &
-		$\mathsf{pk}_A$                                                                                &
-		$\sigma_A$                                                                                     &
-		$S0X$                                                                                          &
-		$\mathrm{stateTag}{=}S0X$ に更新（ロック継続）                                                                                                   \\
+		BuyerDispute                                                   &
+		$S0D$                                                          &
+		$\mathsf{pk}_A$                                                &
+		$\sigma_A$                                                     &
+		$S0X$                                                          &
+		$\mathrm{stateTag}{=}S0X$ に更新（ロック継続）                                                                   \\
 
-		OperatorMediateRelease                                                                         &
-		$S0X$                                                                                          &
-		Anyone                                                                                         &
-		$\sigma_A \wedge \sigma_B$                                                                     &
-		$S1$                                                                                           &
-		$p(1-m)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C$                                                                       \\
+		OperatorMediateRelease                                         &
+		$S0X$                                                          &
+		Anyone                                                         &
+		$\sigma_A \wedge \sigma_B$                                     &
+		$S1$                                                           &
+		$p(1-m)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C$                                       \\
 
-		OperatorMediateRefund                                                                          &
-		$S0X$                                                                                          &
-		Anyone                                                                                         &
-		$\sigma_A \wedge \sigma_B$                                                                     &
-		$S2$                                                                                           &
-		$p\rightarrow \mathsf{pk}_A$                                                                                                           \\
+		OperatorMediateRefund                                          &
+		$S0X$                                                          &
+		Anyone                                                         &
+		$\sigma_A \wedge \sigma_B$                                     &
+		$S2$                                                           &
+		$p\rightarrow \mathsf{pk}_A$                                                                           \\
 
-		BuyerCancel                                                                                    &
-		$S0/S0D$                                                                                       &
-		$\mathsf{pk}_A$                                                                                &
-		$\sigma_A$                                                                                     &
-		$S0C$                                                                                          &
-		$\mathrm{stateTag}{=}S0C$ に更新（ロック継続）                                                                                                   \\
+		BuyerCancel                                                    &
+		$S0/S0D$                                                       &
+		$\mathsf{pk}_A$                                                &
+		$\sigma_A$                                                     &
+		$S0C$                                                          &
+		$\mathrm{stateTag}{=}S0C$ に更新（ロック継続）                                                                   \\
 
-		SellerAcceptCancel                                                                             &
-		$S0C$                                                                                          &
-		$\mathsf{pk}_B$                                                                                &
-		$\sigma_A \wedge \sigma_B$                                                                     &
-		$S2$                                                                                           &
-		$p\rightarrow \mathsf{pk}_A$                                                                                                           \\
+		SellerAcceptCancel                                             &
+		$S0C$                                                          &
+		$\mathsf{pk}_B$                                                &
+		$\sigma_A \wedge \sigma_B$                                     &
+		$S2$                                                           &
+		$p\rightarrow \mathsf{pk}_A$                                                                           \\
 
-		ContractTimeout                                                                                &
-		$S0/S0D/S0X/S0C$                                                                               &
-		Anyone                                                                                         &
-		$(\sigma_A \vee \sigma_B) \wedge \mathrm{timeout\_condition}(\mathrm{stateTag})=\mathrm{true}$ &
-		$S1/S2$                                                                                        &
-		$\mathrm{stateTag}$ に応じた支払（下記の支払マップ）                                                                                                   \\
+		ContractTimeout                                                &
+		$S0/S0D/S0X/S0C$                                               &
+		Anyone                                                         &
+		$\mathrm{timeout\_condition}(\mathrm{stateTag})=\mathrm{true}$ &
+		$S1/S2$                                                        &
+		$\mathrm{stateTag}$ に応じた支払＋FeeReserve から $b(V)\rightarrow \mathsf{pk}_F$                               \\
 		\bottomrule
 	\end{tabularx}
 	\caption{Escrow テンプレートの遷移仕様（検証条件・次状態・支払い）}
@@ -154,9 +157,8 @@ stateTag は $u^\star$ に付随する唯一の共有状態語彙として扱う
 Operator mediation in our model is non-custodial: the operator can facilitate communication or propose a settlement, but cannot unilaterally trigger any terminal transfer. In the state machine, mediated settlement transitions require signatures from both contractual parties. If agreement is not reached, timeout conditions guarantee liveness by enabling an eventual exit from the locked state without relying on operator discretion.
 
 \paragraph{State-dependent payout (Finalize/Timeout)}
-TransSpec の終端出力（FinalizeContract/Timeout）は $\mathrm{stateTag}$ に応じた支払マップとして与える。
-マイナーが finalize した場合は bounty $b$ がマイナー報酬として支払われ、コントラクトの関係者が finalize した場合は $b$ を支払わない。
-基本的には関係者（例：運営者 $\mathsf{pk}_C$）が finalize することを推奨し、関係者の範囲は運営者に限定してもよい。
+TransSpec の終端出力（FinalizeContract/Timeout）は $\mathrm{stateTag}$ に応じた principal の支払マップとして与える。
+FeeReserve の消費は \textsf{FinalizeTx} により別途扱い、$b(V)$ は principal から差し引かない。
 
 \[
 	\begin{aligned}
@@ -169,17 +171,14 @@ TransSpec の終端出力（FinalizeContract/Timeout）は $\mathrm{stateTag}$ �
 	\end{aligned}
 \]
 
-マイナーによる finalize（$\mathsf{pk}_M$）の場合は次である：
+FeeReserve の出力は次の通りである：
 \[
-	\begin{aligned}
-		S0  & \Rightarrow (p-b)\rightarrow \mathsf{pk}_A,\; b\rightarrow \mathsf{pk}_M                                     \\
-		S0D & \Rightarrow (p(1-m)-b)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C,\; b\rightarrow \mathsf{pk}_M \\
-		S0X & \Rightarrow (p-b)\rightarrow \mathsf{pk}_A,\; b\rightarrow \mathsf{pk}_M                                     \\
-		S0C & \Rightarrow (p-b)\rightarrow \mathsf{pk}_A,\; b\rightarrow \mathsf{pk}_M                                     \\
-		S1  & \Rightarrow (p(1-m)-b)\rightarrow \mathsf{pk}_B,\; pm\rightarrow \mathsf{pk}_C,\; b\rightarrow \mathsf{pk}_M \\
-		S2  & \Rightarrow (p-b)\rightarrow \mathsf{pk}_A,\; b\rightarrow \mathsf{pk}_M
-	\end{aligned}
+	b(V) \rightarrow \mathsf{pk}_F,\quad R(V)-b(V)-\mathrm{fee} \rightarrow \mathsf{pk}_C
 \]
+
+In normal operation, the operator is expected to issue \textsf{FinalizeTx} as part of the mediation workflow.
+However, to avoid indefinite freezing when the operator is inactive or fees are volatile, finalization is public: any actor may issue \textsf{FinalizeTx} and collect $b(V)$ from \textsf{FeeReserve}.
+Crucially, \textsf{FeeReserve} is funded from the operator-side fee budget, so the principal settlement amounts between contractual parties are not reduced by finalization.
 
 \subsubsection{LogicSet, Pred, and TransSpec}
 \label{subsec:escrow-logics}
@@ -214,7 +213,7 @@ We show that the case-study state machine satisfies the requirements in Section~
 
 \paragraph{A1 (Operator cannot unilaterally transfer assets).}
 \textbf{Proposition 1.} From any reachable state, there is no transition sequence leading to a terminal payout state that can be authorized solely by the operator.
-\textit{Proof sketch.} In Table~2, every transition that reaches a terminal payout state requires signatures from the contractual parties. After revising mediated settlement transitions to require $\sigma_A \wedge \sigma_B$, no operator-only authorization exists for terminal transitions. Therefore $\mathrm{Disc}(\mathrm{Operator})=\emptyset$ holds for terminal payouts.
+\textit{Proof sketch.} In Table~2, mediated settlement transitions to terminal payouts require $\sigma_A \wedge \sigma_B$. Timeout-based finalization is public but time-gated, so it does not grant discretionary operator-only control over terminal payouts. Therefore $\mathrm{Disc}(\mathrm{Operator})=\emptyset$ holds for discretionary terminal transitions.
 
 \paragraph{A2 (No unilateral settlement by a single party).}
 \textbf{Proposition 2.} Neither buyer nor seller alone can force a terminal transfer that settles the contract against the other party’s intent.
@@ -227,5 +226,36 @@ We show that the case-study state machine satisfies the requirements in Section~
 \paragraph{B1 (Bounded verification and minimal third-party trust).}
 \textbf{Argument.} Each transition is validated by template-constrained predicates over a UTXO transaction structure. This avoids general-purpose VM execution, bounds the validation surface, and improves auditability by construction. The evaluation in Sections~6.3--6.4 reports the resulting audit surface and cost implications.
 
-\input{sections/07_security_and_evaluation}
-\input{sections/08_discussion_and_limitations}
+\subsection{Threat Model and Security Analysis}
+
+\paragraph{Threat model.}
+Buyer/Seller/Operator のいずれも悪意主体になり得るものとし、共謀も考慮する。
+暗号学的前提として署名偽造は不可能とする一方、検閲・遅延・不作為（ブロードキャストしない等）は起こり得る。
+チェーン側前提としてタイムロックが利用可能であること、最終性が得られることを仮定し、手数料市場の揺れは評価時の感度として扱う。
+
+\paragraph{What we prevent.}
+本稿の焦点は、資金の不正流用（misappropriation）、単独当事者による不当な終端決着（unilateral settlement）、およびロック資金の永久凍結（freeze）である。
+これらは、テンプレート検証規則と遷移表により「禁止したい遷移」を admissible から排除し、許される遷移のみを列挙することで抑止する。
+
+\paragraph{What remains.}
+一方で、検閲やネットワーク遅延、当事者間の共謀、オフチェーンの詐欺（配送・外部決済など）といった攻撃面は残り得る。
+
+\subsection{Auditability, Cost, and Comparison}
+
+\paragraph{Audit surface.}
+監査対象は、テンプレートとして制約された $\mathsf{Pred}$ と $\mathsf{TransSpec}$、および遷移表により上限付きに限定される。
+この設計は、当事者が署名時点で「何が起き得るか」を点検しやすくし、実装・運用裁量に依存する領域を縮小する。
+
+\paragraph{Cost.}
+実装対象と再現性（どのチェーン／ライブラリで、どのコミットで再現できるか）を明示し、生成器・検証器・テスト手順により追跡可能にする。
+各遷移トランザクションのサイズ／手数料、オンチェーンデータ量、必要署名数などを見積もり、手数料市場の揺れに対する感度も評価する。
+評価で出す数値（サイズ、手数料、計算量、必要署名数、オンチェーン状態量）が、第5章で定義したトランザクション構造と第6章のトランザクション列に対して算出された、と追跡できる必要がある。
+
+\paragraph{Parameterization and sensitivity.}
+We evaluate the impact of $(\alpha_b, b_{\min}, b_{\max}, F_{\max})$ on (i) finalization success probability under fee spikes, and (ii) effective operator fee consumption.
+We report ranges where $b_{\min}$ dominates small-value escrows (ensuring feasibility), while $b_{\max}$ caps large-value overpayment, and $F_{\max}$ bounds worst-case fee burn from \textsf{FeeReserve}.
+
+\paragraph{Comparison.}
+同等機能を一般的なVM型スマートコントラクト（例：EVM）で実現する場合と比較し、監査対象・状態依存・実行失敗モードがどのように増えやすいか、またアップグレード裁量やバグ依存の論点がどの程度残るかを整理する。
+
+\subsection{Discussion and Limitations}

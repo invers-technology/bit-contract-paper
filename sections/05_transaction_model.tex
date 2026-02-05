@@ -68,6 +68,8 @@ $\mathsf{out}$ に $\mathsf{to}=0x0$ の焼却出力を必須とする設計は�
 検証は (i) creator 認証（署名または入力所有の証明）、(ii) canonical TLV bytes 上の $\mathsf{TypeCheck}$、(iii) $\mathsf{c}_{id}$ 再計算一致を満たすことから成る。
 ここで $\mathsf{ArgSchema}[\mathsf{t}_{index}]$ はテンプレートの Constructor 引数スキーマである。
 DoS 対策として \texttt{CreateTx} に追加デポジットを必須化するのは第一選択ではなく、(i) canonical TLV bytes 化による検証コストの一定化、(ii) 手数料市場、(iii) 状態肥大を生む Lock/Execute の規律を優先する。
+The contract instantiation MUST create a dedicated \textsf{FeeReserve} output of value $R(V)$, funded from the operator fee budget.
+This output is later consumed by \textsf{FinalizeTx} to reward the finalizer and to cover a bounded transaction fee.
 
 \subsection{LockUtxo}
 Definition 9 の LockUtxo に対応する。
@@ -78,6 +80,17 @@ LockUtxo は通常 $u$ を消費し、$(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\m
 CreateContract と LockUtxo は実装上同一 $tx$ に畳めるが、\texttt{tx\_type} の排他性は維持される必要がある。
 本稿では (i) \texttt{tx\_type=LOCK} とし、\texttt{args} に create 情報（\texttt{init\_params\_bytes} 等）を含める方式を採用案とする。
 将来拡張として (ii) \texttt{tx\_type=CREATE\_LOCK} の複合型を導入する方式もあり得る。
+
+\subsection{FeeReserve output}
+We introduce a dedicated UTXO output, \textsf{FeeReserve}, whose value is fixed to $R(V)$ and whose spending is restricted by the \textsf{Finalize} template.
+The \textsf{FeeReserve} output is funded from the operator-side fee budget, not from the principal $V$.
+
+\paragraph{Funding constraint.}
+Let $\mathrm{OpFee}(V)$ denote the operator fee budget. The construction MUST satisfy:
+\[
+	\mathrm{OpFee}(V) \ge R(V),
+\]
+so that $R(V)$ can be reserved without touching the principal.
 
 \subsection{ExecuteContract}
 $u^\star$ を入力として消費する ExecuteContract $tx_\ell$ を指す。
@@ -94,3 +107,17 @@ Definition 11 で導入した確定遷移 FinalizeContract に対応する。
 期限経過 $\operatorname{after}(d)$ や $\operatorname{after}(t)$ に対応する遷移ラベル $\ell_{\mathrm{final}}$ を与え、admissibility と同じ枠組みで検証可能にする。
 Contract Transaction 共通ヘッダに従い、\texttt{tx\_type} は \texttt{FINALIZE} とする（任意）。
 誰でも起動可能な確定遷移として扱い、活性（デッドロック回避）に接続する。
+
+\subsection{FinalizeTx (public finalization)}
+Finalization MAY be performed by any actor (operator, buyer, seller, or a third party) to ensure liveness.
+Let $\mathrm{pk}_F$ denote the public key of the finalizer (the transaction issuer).
+
+\paragraph{Spending rule.}
+\textsf{FinalizeTx} consumes the \textsf{FeeReserve} UTXO and produces:
+(i) an output paying exactly $b(V)$ to $\mathrm{pk}_F$, and
+(ii) an output returning the remainder to the operator payout address.
+
+\paragraph{Fee bound.}
+To bound transaction fees, the \textsf{Finalize} template enforces that the operator-return output is at least $R(V)-b(V)-F_{\max}$.
+Equivalently, at most $F_{\max}$ of the \textsf{FeeReserve} value can be left as miner fee.
+This guarantees that finalization can be executed with bounded fee consumption while preventing diversion of the principal $V$.

@@ -24,7 +24,7 @@ Outpoint を $\mathsf{op}=(\mathsf{tx}_{id}, i)$ とし、UTXO を $u$ で次の
 	u=(\mathsf{op}, v, \mathsf{pk})
 \end{equation}
 \begin{equation}
-	u^\star=(\mathsf{op}, v, \mathsf{pk}, \mathsf{c}_{id}, \mathsf{stateTag})
+	u^\star=(\mathsf{op}, v, \mathsf{c}_{id}, \mathsf{stateTag})
 \end{equation}
 ここで $v$ は額面、$\mathsf{pk}$ は所有者（支出権限）を表す公開鍵、$u$ は通常の UTXO である。
 テンプレート参照と状態タグを伴うロック状態の UTXO を \textbf{Locked UTXO} と呼び、$u^\star$ と記す。
@@ -128,7 +128,7 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 	\item $\mathsf{LogicSet}$：検証ロジック（validator）の集合。
 	      Key を $\mathsf{LogicIndex}$ $\ell$ とし、value は $\mathsf{func}_\ell$ を与える写像であり、$\mathsf{LogicSet}[\ell] = \mathsf{func}_\ell$ と書く。
 	      各 $\mathsf{func}_\ell$ は $(\mathsf{args}_\ell, \mathsf{modifier}_\ell, \mathsf{post\_state}_\ell, \mathsf{validation}_\ell)$ から成り、$\mathsf{modifier}_\ell$ は現状態で当該関数を実行可能かを判定し、$\mathsf{validation}_\ell$ は $\mathsf{post\_state}_\ell$ と $\mathsf{args}_\ell$ を検証して遷移の妥当性を確認する。
-	\item $\mathsf{TransSpec}$：状態と生成する $tx$ の形の二つから成る出力仕様
+	\item $\mathsf{TransSpec}$：状態と生成する $tx$ の形の二つから成る出力仕様（finalization incentive は定数 $b$ ではなく、取引額に依存する $b(V)$ として扱う）
 \end{itemize}
 本稿ではテンプレート $\tau$ を記述する DSL として Computational Law DSL である Stipula を採用する。
 Stipula は自然言語的な契約条項を $\mathsf{Pred}$ および各遷移に対応する $\mathsf{TransSpec}$ として形式化し、検証者が $tx$ を見て一意に判定できる決定的条件（B1）として与える。
@@ -143,18 +143,19 @@ $\tau \in \Gamma$ は「契約コード」ではなく 検証規則（consensus-
 \paragraph{Definition 7：Contract Instance：インスタンス記述子}
 コントラクト・インスタンス $I$ は
 \begin{equation}
-	I := (\mathsf{c}_{id}, \mathsf{t}_{index}, \vec{a})
+	I := (\mathsf{c}_{id}, \mathsf{t}_{index}, \mathsf{pk}_{\mathrm{deployer}}, \vec{a})
 \end{equation}
 で表す。
+$\mathsf{pk}_{\mathrm{deployer}}$ はインスタンスを生成した deployer（作成者）の公開鍵であり、CreateContract においては $\mathsf{pk}_{\mathrm{from}}$ と一致する。
 $\vec{a}=(a_1,\dots,a_k)$ は $\mathsf{InitParams}$ に対応する初期化引数列であり、CreateContract の Constructor 引数として $\mathsf{InitParams}$ を初期化し、以後は更新されない。
 $\vec{a}$ は canonical TLV encoding された \texttt{init\_params\_bytes} のデコード結果であり、合意対象は byte 列そのものとする。
 コントラクトインスタンスの内部変数（$\mathsf{InitParams}$）は、CreateContract によって生成された際から不変である。
 $\mathsf{c}_{id}$ は決定的に導出される識別子であり、例えば
 \begin{equation}
-	\mathsf{c}_{id} := H(\mathsf{tx}_{id} \parallel \mathsf{pk}_{\mathrm{from}} \parallel \mathsf{t}_{index} \parallel \mathsf{init\_params\_bytes})
+	\mathsf{c}_{id} := H(\mathsf{tx}_{id} \parallel \mathsf{pk}_{\mathrm{deployer}} \parallel \mathsf{t}_{index} \parallel \mathsf{init\_params\_bytes})
 \end{equation}
 のように作れる（重要なのは同一入力から一意であること）。
-ここで $\mathsf{tx}_{id}$ は CreateContract $tx$ の ID、$\mathsf{pk}_{\mathrm{from}}$ は CreateContract/LockUtxo を作成する主体の \textbf{from（送信元）} 公開鍵（入力 $u$ の所有者公開鍵）である。
+ここで $\mathsf{tx}_{id}$ は CreateContract $tx$ の ID、$\mathsf{pk}_{\mathrm{deployer}}$ は CreateContract/LockUtxo を作成する主体の \textbf{from（送信元）} 公開鍵（入力 $u$ の所有者公開鍵）である。
 これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（B1）。
 
 \paragraph{Definition 8：$u^\star$：型付き状態}
@@ -205,6 +206,24 @@ $\mathsf{chain\_time}$ はブロックヘッダ時刻ではなく、合意的時
 	\item[(i)] 述語の成立：$\mathsf{Pred}_{\tau,\ell}(\Sigma, tx, \mathsf{c}_{id}) = \mathsf{true}$
 	\item[(ii)] 出力の一致：$\mathsf{out}$ が $\mathsf{TransSpec}_{\tau,\ell}$ に一致（受益者・配分・ロック継続・次状態タグ等）
 \end{enumerate}
+
+\subsection{Finalization incentive $b(V)$ and fee reserve}
+Let $V$ denote the principal amount locked in escrow (the value transferred between contractual parties, excluding operator fees).
+We define the finalization incentive $b(V)$ as a bounded proportional function:
+\[
+	b(V) := \min\left(b_{\max},\; \max\left(b_{\min},\; \alpha_b \cdot V\right)\right),
+\]
+where $\alpha_b \in (0,1)$ is the incentive rate, and $b_{\min}, b_{\max} > 0$ are lower/upper bounds.
+
+To ensure liveness under variable network fees, we additionally reserve a bounded fee budget $F_{\max} \ge 0$.
+We define the \emph{fee reserve} amount as:
+\[
+	R(V) := b(V) + F_{\max}.
+\]
+
+\paragraph{Design principle.}
+The principal $V$ MUST NOT be reduced to fund finalization.
+Instead, $R(V)$ is deducted from the operator-side fee budget (or explicitly provisioned operator reserve), so that the contract parties' settlement amounts remain unchanged while finalization remains incentivized.
 
 \paragraph{Definition 11：FinalizeContract / Timeout}
 テンプレートは「誰でも起動可能な確定遷移」を持ち得る。

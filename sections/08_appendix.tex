@@ -40,16 +40,16 @@ Type 割当はプロトコル定数とし、以下の最小例を用いる。
 	\item \texttt{0x0006}：\texttt{args}（TLV bytes）
 \end{itemize}
 InitParams の最小例では、\texttt{0x0101}=m(u16), \texttt{0x0102}=d(u64),
-\texttt{0x0103}=t(u64), \texttt{0x0104}=b(u16) を用いる。
+\texttt{0x0103}=t(u64) を用いる。
 
 \begin{verbatim}
 Canonical example
 init_params_bytes (hex):
-0101020001 010208000000000000000a 0103080000000000000014 0104020001
+0101020001 010208000000000000000a 0103080000000000000014
 
 aux (hex):
 0001020001 00020101 000320aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-00040400000001 0006200101020001010208000000000000000a01030800000000000000140104020001
+00040400000001 0006200101020001010208000000000000000a0103080000000000000014
 valid: types are sorted, no duplicates, length is canonical.
 
 Non-canonical examples (invalid)
