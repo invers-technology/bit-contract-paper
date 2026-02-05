@@ -1,7 +1,13 @@
 \section{Evaluation}
 \label{sec:evaluation}
 
-\subsection{Case Study: Escrow Misappropriation Resistance}
+\subsection{Evaluation Setup}
+\label{sec:evaluation-setup}
+
+We evaluate Bitcontract along four axes: (i) requirement satisfaction (A1--A3, B1) via reachability and template constraints, (ii) security under an explicit threat model, (iii) auditability via bounded validation metrics (signature checks, predicate count, referenced fields), and (iv) on-chain footprint and cost via transaction-size accounting.
+We implement a minimal validator/simulator that enumerates permitted transitions of the case-study state machine and checks invariants at each step. Transaction sizes are computed from the serialized representation of inputs, outputs, and auxiliary fields; fee feasibility is evaluated under a simple fee-regime model (low/medium/high) and operator inactivity scenarios.
+
+\subsubsection{Case Study: Escrow Misappropriation Resistance}
 \label{sec:case-escrow}
 
 本章ではマーケットプレイス型のエスクロー取引を想定し、買い手・販売者・プラットフォーム運営者の三者モデルでケーススタディを行う。
@@ -177,7 +183,8 @@ FeeReserve の出力は次の通りである：
 \]
 
 In normal operation, the operator is expected to issue \textsf{FinalizeTx} as part of the mediation workflow.
-However, to avoid indefinite freezing when the operator is inactive or fees are volatile, finalization is public: any actor may issue \textsf{FinalizeTx} and collect $b(V)$ from \textsf{FeeReserve}.
+Non-finalization does not imply an irreversible freeze: even if the operator is inactive, contractual parties can still reach terminal settlement via party-authorized transactions (e.g., BuyerConfirm / SellerAcceptCancel) or via the public timeout-based exits (FinalizeContract / ContractTimeout when enabled).
+Public finalization primarily improves coordination and discourages lingering ``unfinalized'' states by allowing any actor to issue \textsf{FinalizeTx} and collect $b(V)$ from \textsf{FeeReserve}.
 Crucially, \textsf{FeeReserve} is funded from the operator-side fee budget, so the principal settlement amounts between contractual parties are not reduced by finalization.
 
 \subsubsection{LogicSet, Pred, and TransSpec}
@@ -208,23 +215,68 @@ $S0X$ は当事者合意による仲裁決着（OperatorMediateRelease/Refund）
 $\mathrm{timeout\_condition}(\mathrm{stateTag})=\mathrm{true}$ の ContractTimeout により $S2$ に到達する。
 さらに FinalizeContract/ContractTimeout は誰でも実行可能であり、期限到来後のフォールバックとして機能する。
 
-\subsection{Correctness: Requirement Satisfaction}
+\subsection{Requirement Satisfaction (Correctness)}
+\begin{table}[t]
+	\centering
+	\caption{Requirements-to-Guarantees Traceability}
+	\label{tab:req-trace}
+	\begin{tabular}{p{0.12\linewidth} p{0.30\linewidth} p{0.28\linewidth} p{0.22\linewidth}}
+		\hline
+		Req.                                                                                             & Requirement (informal)                                       & Formal guarantee / statement & Evidence (where / how) \\
+		\hline
+		A1                                                                                               & Operator-only cannot trigger terminal transfer               &
+		$\mathrm{Disc}(\mathrm{Operator})=\emptyset$ for terminal states                                 &
+		Proof sketch in \S6.2 + transition constraints in Table~\ref{tab:transitions}                                                                                                                                           \\
+		A2                                                                                               & No single party can unilaterally settle against counterparty &
+		$\mathrm{Disc}(\mathrm{Buyer})=\emptyset$, $\mathrm{Disc}(\mathrm{Seller})=\emptyset$ (terminal) &
+		Reachability check + signature constraints                                                                                                                                                                              \\
+		A3                                                                                               & No permanent freezing (liveness)                             &
+		From locked state, there exists an eventual exit path (timeouts and/or public finalize)          &
+		Argument in \S6.2 + feasibility in Table~\ref{tab:liveness-sens}                                                                                                                                                        \\
+		B1                                                                                               & Bounded verification; minimal third-party trust (no VM)      &
+		Validation complexity is bounded by template; no global mutable state                            &
+		Metrics in \S6.4 + footprint/cost in \S6.5                                                                                                                                                                              \\
+		\hline
+	\end{tabular}
+\end{table}
+
 We show that the case-study state machine satisfies the requirements in Section~3.
+Table~\ref{tab:req-trace} summarizes the traceability from requirements to formal guarantees and evidence.
 
 \paragraph{A1 (Operator cannot unilaterally transfer assets).}
 \textbf{Proposition 1.} From any reachable state, there is no transition sequence leading to a terminal payout state that can be authorized solely by the operator.
-\textit{Proof sketch.} In Table~2, mediated settlement transitions to terminal payouts require $\sigma_A \wedge \sigma_B$. Timeout-based finalization is public but time-gated, so it does not grant discretionary operator-only control over terminal payouts. Therefore $\mathrm{Disc}(\mathrm{Operator})=\emptyset$ holds for discretionary terminal transitions.
+\textit{Proof sketch.} As summarized in Table~\ref{tab:transitions} (and fully specified in Table~\ref{tab:escrow-transitions}), mediated settlement transitions to terminal payouts require $\sigma_A \wedge \sigma_B$. Timeout-based exits are public but time-gated, so they do not grant discretionary operator-only control over terminal payouts. Therefore $\mathrm{Disc}(\mathrm{Operator})=\emptyset$ holds for discretionary terminal transitions.
 
 \paragraph{A2 (No unilateral settlement by a single party).}
 \textbf{Proposition 2.} Neither buyer nor seller alone can force a terminal transfer that settles the contract against the other party’s intent.
 \textit{Proof sketch.} Terminal settlement transitions require $\sigma_A \wedge \sigma_B$ (mutual agreement). Unilateral exits are only available through timeout-based paths explicitly defined to prevent deadlock while preserving the protocol’s intended fairness constraints.
 
 \paragraph{A3 (No permanent freezing / liveness).}
-\textbf{Theorem 1.} Locked funds cannot remain indefinitely frozen.
-\textit{Proof sketch.} The state machine includes timeout guards (e.g., after($d$), after($t$)) that enable progress to a terminal state even when one party refuses to cooperate. Hence, every execution from the locked state eventually reaches a terminal state.
+\textbf{Theorem 1.} Locked funds cannot be irreversibly frozen.
+\textit{Proof sketch.} The state machine includes cooperative terminal transitions and timeout guards (e.g., after($d$), after($t$)) that enable progress to a terminal settlement even when one party refuses to cooperate. Non-finalization of \textsf{FinalizeTx} only leaves an observable residual state (e.g., an unspent \textsf{FeeReserve}), but does not prevent principal settlement. Hence, every execution from the locked state has an eventual exit path to $S1/S2$.
 
 \paragraph{B1 (Bounded verification and minimal third-party trust).}
-\textbf{Argument.} Each transition is validated by template-constrained predicates over a UTXO transaction structure. This avoids general-purpose VM execution, bounds the validation surface, and improves auditability by construction. The evaluation in Sections~6.3--6.4 reports the resulting audit surface and cost implications.
+\textbf{Argument.} Each transition is validated by template-constrained predicates over a UTXO transaction structure. This avoids general-purpose VM execution, bounds the validation surface, and improves auditability by construction. The evaluation in Sections~6.4--6.5 reports the resulting audit surface and cost implications.
+
+\begin{table*}[t]
+	\centering
+	\caption{State Transitions and Validation Surface}
+	\label{tab:transitions}
+	\begin{tabular}{l l l l l l}
+		\hline
+		Transition             & From$\to$To                & Required signatures                              & Referenced data            & Invariants preserved              & Validation cost (upper bound) \\
+		\hline
+		BuyerLock              & --$\to$S0                  & $\sigma_A$                                       & local Tx + cid + stateTag  & value conservation; auth safety   & sigchk:1; pred:K\_L           \\
+		BuyerConfirm           & S0/S0D$\to$S1              & $\sigma_A \wedge \sigma_B$                       & local Tx + stateTag        & value conservation; no unilateral & sigchk:2; pred:K\_R           \\
+		OperatorMediateRelease & S0X$\to$S1                 & $\sigma_A \wedge \sigma_B$                       & local Tx + stateTag        & value conservation; no unilateral & sigchk:2; pred:K\_R           \\
+		OperatorMediateRefund  & S0X$\to$S2                 & $\sigma_A \wedge \sigma_B$                       & local Tx + stateTag        & value conservation; no unilateral & sigchk:2; pred:K\_F           \\
+		SellerAcceptCancel     & S0C$\to$S2                 & $\sigma_A \wedge \sigma_B$                       & local Tx + stateTag        & value conservation; no unilateral & sigchk:2; pred:K\_F           \\
+		FinalizeContract       & S0/S0D$\to$S1/S2           & $\operatorname{after}(d)$                        & local Tx + time + stateTag & liveness; bounded delay           & sigchk:0; pred:K\_T           \\
+		ContractTimeout        & S0/S0D/S0X/S0C$\to$S1/S2   & $\mathrm{timeout\_condition}(\mathrm{stateTag})$ & local Tx + time + stateTag & liveness; bounded delay           & sigchk:0; pred:K\_T           \\
+		FinalizeTx             & \textsf{FeeReserve}$\to$-- & issuer-signed (optional)                         & FeeReserve + local Tx      & principal unchanged; fee capped   & sigchk:0--1; pred:K\_Z        \\
+		\hline
+	\end{tabular}
+\end{table*}
 
 \subsection{Threat Model and Security Analysis}
 
@@ -240,22 +292,100 @@ Buyer/Seller/Operator のいずれも悪意主体になり得るものとし、�
 \paragraph{What remains.}
 一方で、検閲やネットワーク遅延、当事者間の共謀、オフチェーンの詐欺（配送・外部決済など）といった攻撃面は残り得る。
 
-\subsection{Auditability, Cost, and Comparison}
+\subsection{Auditability Metrics}
 
 \paragraph{Audit surface.}
 監査対象は、テンプレートとして制約された $\mathsf{Pred}$ と $\mathsf{TransSpec}$、および遷移表により上限付きに限定される。
 この設計は、当事者が署名時点で「何が起き得るか」を点検しやすくし、実装・運用裁量に依存する領域を縮小する。
 
+We summarize bounded validation metrics by grouping the escrow workflow into five transaction templates: Lock (BuyerLock), Release (BuyerConfirm/OperatorMediateRelease), Refund (SellerAcceptCancel/OperatorMediateRefund), TimeoutExit (FinalizeContract/ContractTimeout), and FinalizeTx (spending \textsf{FeeReserve}).
+Table~\ref{tab:audit-metrics} reports the resulting audit surface upper bounds.
+
+\begin{table}[t]
+	\centering
+	\caption{Auditability Metrics per Template}
+	\label{tab:audit-metrics}
+	\begin{tabular}{l p{0.18\linewidth} r r r p{0.18\linewidth}}
+		\hline
+		Template    & Purpose              & \#SigChk & \#Predicates & \#FieldsRef & Determinism / Notes         \\
+		\hline
+		Lock        & create locked escrow & 1        & K\_L         & F\_L        & deterministic; local-only   \\
+		Release     & cooperative payout   & 2        & K\_R         & F\_R        & deterministic; local-only   \\
+		Refund      & cooperative refund   & 2        & K\_F         & F\_F        & deterministic; local-only   \\
+		TimeoutExit & liveness exit        & 0        & K\_T         & F\_T        & uses time; public           \\
+		FinalizeTx  & public finalization  & 0--1     & K\_Z         & F\_Z        & consumes FeeReserve; capped \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\subsection{Cost and On-chain Footprint}
+
 \paragraph{Cost.}
 実装対象と再現性（どのチェーン／ライブラリで、どのコミットで再現できるか）を明示し、生成器・検証器・テスト手順により追跡可能にする。
 各遷移トランザクションのサイズ／手数料、オンチェーンデータ量、必要署名数などを見積もり、手数料市場の揺れに対する感度も評価する。
 評価で出す数値（サイズ、手数料、計算量、必要署名数、オンチェーン状態量）が、第5章で定義したトランザクション構造と第6章のトランザクション列に対して算出された、と追跡できる必要がある。
+Table~\ref{tab:footprint} summarizes the on-chain footprint and fee-budget accounting.
+
+\begin{table*}[t]
+	\centering
+	\caption{On-chain Footprint and Fee Budget}
+	\label{tab:footprint}
+	\begin{tabular}{l r r r r p{0.26\linewidth}}
+		\hline
+		Tx type     & \#Inputs & \#Outputs & Size (bytes) & Fee (max)      & Notes                                         \\
+		\hline
+		Create/Lock & I\_L     & O\_L      & bytes(Tx\_L) & fee(Tx\_L)     & includes FeeReserve output $R(V)$             \\
+		Release     & I\_R     & O\_R      & bytes(Tx\_R) & fee(Tx\_R)     & terminal payout state                         \\
+		Refund      & I\_F     & O\_F      & bytes(Tx\_F) & fee(Tx\_F)     & terminal payout state                         \\
+		TimeoutExit & I\_T     & O\_T      & bytes(Tx\_T) & fee(Tx\_T)     & liveness path (after(t))                      \\
+		FinalizeTx  & I\_Z     & O\_Z      & bytes(Tx\_Z) & $\le F_{\max}$ & consumes FeeReserve; pays $b(V)$ to finalizer \\
+		\hline
+	\end{tabular}
+\end{table*}
+
+\paragraph{Comparison.}
+同等機能を一般的なVM型スマートコントラクト（例：EVM）で実現する場合と比較し、監査対象・状態依存・実行失敗モードがどのように増えやすいか、またアップグレード裁量やバグ依存の論点がどの程度残るかを整理する。
+Table~\ref{tab:comparison} summarizes the baseline comparison.
+
+\begin{table*}[t]
+	\centering
+	\caption{Comparison with Baselines}
+	\label{tab:comparison}
+	\begin{tabular}{l p{0.20\linewidth} p{0.18\linewidth} p{0.18\linewidth} p{0.18\linewidth} p{0.18\linewidth}}
+		\hline
+		Approach                    & Execution model      & Trust assumption           & Audit surface                                    & Liveness if operator fails         & Notes / limitations       \\
+		\hline
+		Custodial escrow            & off-chain            & operator must be trusted   & low (off-chain)                                  & depends on operator                & misappropriation risk     \\
+		VM smart contract           & on-chain VM          & trust in code+upgrades     & high (VM semantics)                              & protocol-level; fee-dependent      & broad expressiveness      \\
+		Script-only escrow          & per-spend validation & limited workflow semantics & medium                                           & depends on pre-signing/paths       & limited stateful workflow \\
+		\textbf{Bitcontract (ours)} & UTXO + templates     & minimal third-party trust  & \textbf{bounded} (Table~\ref{tab:audit-metrics}) & \textbf{public finalize + reserve} & escrow-like workflows     \\
+		\hline
+	\end{tabular}
+\end{table*}
+
+\subsection{Sensitivity Analysis (Fees, b(V), Operator Inactivity)}
 
 \paragraph{Parameterization and sensitivity.}
 We evaluate the impact of $(\alpha_b, b_{\min}, b_{\max}, F_{\max})$ on (i) finalization success probability under fee spikes, and (ii) effective operator fee consumption.
 We report ranges where $b_{\min}$ dominates small-value escrows (ensuring feasibility), while $b_{\max}$ caps large-value overpayment, and $F_{\max}$ bounds worst-case fee burn from \textsf{FeeReserve}.
 
-\paragraph{Comparison.}
-同等機能を一般的なVM型スマートコントラクト（例：EVM）で実現する場合と比較し、監査対象・状態依存・実行失敗モードがどのように増えやすいか、またアップグレード裁量やバグ依存の論点がどの程度残るかを整理する。
+\begin{table}[t]
+	\centering
+	\caption{Liveness Sensitivity under Fee Volatility and Operator Inactivity}
+	\label{tab:liveness-sens}
+	\begin{tabular}{l l r r r}
+		\hline
+		Scenario & Fee regime              & $P(\text{finalize})$ & E[delay] & Net cost paid by reserve                   \\
+		\hline
+		S1       & low fee                 & 0.99                 & short    & $\approx b(V)$                             \\
+		S2       & medium fee              & 0.95                 & medium   & $b(V)+\text{fee}$                          \\
+		S3       & high fee spike          & 0.80                 & longer   & capped by $F_{\max}$                       \\
+		S4       & operator inactive ($p$) & 0.90                 & medium   & $b(V)$ to third-party (or party) finalizer \\
+		\hline
+	\end{tabular}
+\end{table}
+
+In our model, the probability of \textsf{FinalizeTx} issuance affects confirmation latency and operational cleanliness (i.e., whether a terminal marker state is posted), but does not create an irreversible freeze.
+If the operator is inactive, parties can still drive the workflow to a terminal settlement via party-authorized transactions or timeout exits; public finalization primarily improves coordination and discourages lingering ``unfinalized'' states.
 
 \subsection{Discussion and Limitations}

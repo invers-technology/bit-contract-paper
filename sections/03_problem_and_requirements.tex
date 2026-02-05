@@ -93,8 +93,13 @@ From the goals above, we derive the following requirements.
 
 \textbf{A3 (No permanent freezing / liveness).} Locked assets must not remain indefinitely frozen; a timeout-based path must guarantee eventual progress to a terminal state.
 
+\paragraph{Clarification on non-finalization.}
+Non-finalization does not imply that funds remain permanently locked without recourse.
+Even if the operator does not issue \textsf{FinalizeTx}, any contractual party can still finalize the workflow by issuing the corresponding terminal transaction (e.g., release/refund or a timeout-exit when enabled).
+Therefore, the system does not rely on operator activity for safety or liveness: the contract state may remain observable as ``unfinalized,'' but the principal is not irreversibly frozen.
+
 \paragraph{Liveness under fee volatility.}
-A constant finalization reward can fail to incentivize finalization when network fees exceed the fixed reward, leading to indefinite non-completion in practice.
+A constant finalization reward can fail to incentivize \textsf{FinalizeTx} when network fees exceed the fixed reward, leading to indefinite non-finalization (operationally, lingering \textsf{FeeReserve}) in practice.
 Therefore, the design includes a value-dependent incentive $b(V)$ with bounds and a bounded fee budget $F_{\max}$ reserved from the operator-side fee budget.
 
 \textbf{B1 (Bounded verification and minimal third-party trust).} Contract behavior should avoid general-purpose VM execution. Verification must be bounded and auditable by construction using a UTXO-based transaction model and readable, template-constrained predicates (computational-law style validation).
