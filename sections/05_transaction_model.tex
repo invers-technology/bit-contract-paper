@@ -40,7 +40,14 @@ return StrictCheck(fields.tx_type, tx, fields)
 排他性は \texttt{tx\_type} の一意性によって担保され、同一 $tx$ が複数の型として成立しない。
 DoS 耐性の観点では、canonical TLV bytes と cheap check により検証コストを一定化し、形推測による余分な探索を避ける。
 合意安全性の観点では、\texttt{tx\_type} と byte[] を合意対象にすることで曖昧な解釈差を排除できる。
-将来拡張性の観点では、\texttt{proto\_version} と \texttt{payload\_bytes} により新型の追加を互換的に扱える。
+将来拡張性の観点では、\texttt{proto\_version} と \texttt{args} により新型の追加を互換的に扱える。
+
+\subsection{Aux（args）の規範仕様と合意対象}
+本稿では、トランザクション補助データ \texttt{aux} を \textbf{canonicalized された TLV 列}として扱い、少なくとも \texttt{proto\_version}、\texttt{tx\_type}、\texttt{cid}、\texttt{args} を含むものとして規範化する。\texttt{args} は\textbf{型固有データ}であり、トランザクション種別ごとの入力を収容する。
+
+合意・検証・\texttt{cid} 導出に用いる入力は、常に \textbf{シリアライズ済み TLV（bytes）}に固定する。例えば \texttt{init\_params\_bytes} のような \textit{bytes 表現}が合意対象であり、文字列表現（例：JSONや可読文字列）は表示・ログ用途の \textbf{非合意データ}に限定する。
+
+また、\texttt{tx\_type} を合意対象として明示的に固定し、\texttt{tx\_type} $\in \{\mathrm{CREATE}, \mathrm{LOCK}, \mathrm{EXECUTE}, \mathrm{FINALIZE}\}$ とする。これは、型の曖昧解釈を排除して安価に分類できるようにし、DoS 耐性を高めると同時に、\texttt{proto\_version} と \texttt{args} によって将来拡張を可能にするためである。
 
 \subsection{CreateContract}
 Definition 9 の CreateContract に対応する。
@@ -69,7 +76,7 @@ LockUtxo は通常 $u$ を消費し、$(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\m
 ロック出力は $\mathrm{P2CONTRACT}(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ のように $\mathsf{c}_{id}$ と状態タグに結びつく形式であり、検証規則で一致を確認する。
 検証は入力の正当消費、ロック出力形式の一致、および必要なら amount の整合を含む。
 CreateContract と LockUtxo は実装上同一 $tx$ に畳めるが、\texttt{tx\_type} の排他性は維持される必要がある。
-本稿では (i) \texttt{tx\_type=LOCK} とし、\texttt{payload\_bytes} に create 情報（\texttt{init\_params\_bytes} 等）を含める方式を採用案とする。
+本稿では (i) \texttt{tx\_type=LOCK} とし、\texttt{args} に create 情報（\texttt{init\_params\_bytes} 等）を含める方式を採用案とする。
 将来拡張として (ii) \texttt{tx\_type=CREATE\_LOCK} の複合型を導入する方式もあり得る。
 
 \subsection{ExecuteContract}

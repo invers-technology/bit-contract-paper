@@ -8,6 +8,15 @@ Bitcoinは信頼できる第三者への依存を最小化する設計を実現�
 本稿は、「トラストレスで分散が必要な特定用途（用途特化型）」にフォーカスしたレイヤー1（L1）チェーンと、そこに適合するスマートコントラクト設計を提案することを目的とする。
 特に匿名電子商取引（例：Silk Roadに類する市場）を典型的ユースケースとして取り上げ、匿名市場において顕在化するExit ScamやEscrow運用といった制度的課題を、暗号技術とComputational Lawに相当する計算機化された法手続きを組み合わせたスマートコントラクトでどのように解決できるかを問い直す。
 
+\subsection{Motivation and Goals}
+Anonymous markets frequently rely on escrow-like intermediaries to coordinate delivery and payment. This arrangement introduces a structural failure mode: once assets are locked under an intermediary’s operational control, misappropriation, discretionary behavior, or indefinite freezing becomes possible.
+
+We target this problem with two explicit goals:
+\textbf{(Goal A)} enable mediation without delegating asset-transfer authority to the operator (non-custodial mediation), and
+\textbf{(Goal B)} minimize third-party trust required to realize smart-contract behavior.
+
+Our approach is a template-based smart contract model that prioritizes auditability and bounded verification complexity. Instead of a general-purpose VM, we instantiate contracts as finite, readable templates executed over a UTXO-based transaction model, optionally using computational-law style predicates for validation. This design aims to reduce upgrade/discretion risks and shrink the audit surface while retaining practical expressiveness for escrow-style workflows.
+
 従来プラットフォームの限界は概ね二つに整理できる。
 第一に、Bitcoin Scriptのような表現力の制約は複雑な機能や自律的な金融プロトコルの実装を著しく困難にする点。
 第二に、Ethereumに代表される汎用VMベースのアプローチは高い記述力を実現した一方で、監査の必然性、利用者が署名時に内容を読み解きにくいことによる第三者依存、資産の所有権がスマートコントラクト側へ移る運用、さらにアップグレード可能性に伴うトラスト要請といった問題を生んだ。

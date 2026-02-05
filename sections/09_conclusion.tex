@@ -1,1 +1,6 @@
-\section{Reference}
+\section{Conclusion and Future Work}
+We addressed the escrow failure mode in anonymous markets by introducing a template-based smart contract model over a UTXO transaction structure with bounded, auditable validation. Our two goals were (A) non-custodial mediation without delegating asset-transfer authority to the operator and (B) minimizing third-party trust by avoiding general-purpose VM semantics.
+
+The case study and correctness arguments demonstrate requirement satisfaction: operator-only terminal transitions are excluded (A1), unilateral settlement by a single party is prevented except via explicit timeout exits (A2), and liveness is guaranteed by timeout-based progress (A3). The evaluation further discusses auditability, cost, and comparison against VM-style smart contracts (B1).
+
+Future work includes expanding the template library beyond escrow, strengthening machine-checkable proofs for the state-machine invariants, and evaluating censorship/delay resilience under realistic network and adversarial conditions.

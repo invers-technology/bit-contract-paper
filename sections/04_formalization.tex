@@ -5,7 +5,7 @@
 代わりに、コントラクトは テンプレート（template）として事前に制約され、インスタンス化はテンプレート参照と引数によって与えられる。
 共有される状態は $\mathsf{stateTag}$ に限定し、テンプレートが定める有限ラベルとしてグローバルに解釈される唯一の状態語彙とする。
 必要であれば $\Gamma$ や参照情報は immutable global registryとして保持し得る。
-これは不変レジストリであり、R4 に整合する。
+これは不変レジストリであり、B1 に整合する。
 
 本章は「一般形式（general form）」までを与え、ユースケース適用は次章でテンプレート群（deposit/release/refund）として具体化する。
 
@@ -39,7 +39,7 @@ $\Sigma$ を
 	\Sigma := (U, \Gamma)
 \end{equation}
 とする。
-$U$ は未消費 UTXO の集合、$\Gamma$ はテンプレート集合（および必要な参照情報）から成る不変レジストリである（R4）。
+$U$ は未消費 UTXO の集合、$\Gamma$ はテンプレート集合（および必要な参照情報）から成る不変レジストリである（B1）。
 
 \paragraph{Definition 3：$tx$}
 $tx$ を
@@ -104,9 +104,9 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 \begin{itemize}
 	\item $\mathsf{LockUtxo}$：資産を拘束する操作（どの形の $u$ を Locked 状態にするか）
 	\item $\mathsf{Pred}$：解放条件（unlock predicate）。
-	      外部裁量ではなく検証可能な述語である（R2）。
+	      外部裁量ではなく検証可能な述語である（B1）。
 	\item $\mathsf{Trans}$：条件成立時に許される出力形（prescribed transition / template）。
-	      出力が任意ではなく、テンプレートで上限付きに規定される（R3）。
+	      出力が任意ではなく、テンプレートで上限付きに規定される（B1）。
 \end{itemize}
 
 \subsection{オンチェーン対象：Template / Contract Instance / $u^\star$}
@@ -131,8 +131,8 @@ $tx$ が $\mathsf{BaseValid}(\Sigma, tx)=\mathsf{true}$ を満たし、かつ ad
 	\item $\mathsf{TransSpec}$：状態と生成する $tx$ の形の二つから成る出力仕様
 \end{itemize}
 本稿ではテンプレート $\tau$ を記述する DSL として Computational Law DSL である Stipula を採用する。
-Stipula は自然言語的な契約条項を $\mathsf{Pred}$ および各遷移に対応する $\mathsf{TransSpec}$ として形式化し、検証者が $tx$ を見て一意に判定できる決定的条件（R2）として与える。
-また、テンプレート制約による監査上限（R3）を、実装規律ではなく仕様記述の表現力として固定できる点が Stipula 採用の理由である。
+Stipula は自然言語的な契約条項を $\mathsf{Pred}$ および各遷移に対応する $\mathsf{TransSpec}$ として形式化し、検証者が $tx$ を見て一意に判定できる決定的条件（B1）として与える。
+また、テンプレート制約による監査上限（B1）を、実装規律ではなく仕様記述の表現力として固定できる点が Stipula 採用の理由である。
 さらに、この制約は、利用者が署名時点で取引意味と遷移結果を点検できる（予測可能性を確保する）ための条件でもある。したがって本稿は、任意コードの汎用VM実装ではなく、テンプレートとして列挙可能な範囲に契約を閉じることを設計原理とする。
 UTXO は実行モデル、Stipula はテンプレート仕様の記述層として位置づけられ、$\mathsf{stateTag}$ と不変レジストリ $\Gamma$ 以外の共有状態を増やさない。
 $\Gamma$ は fixed protocol version $\mathsf{v}_{\mathrm{proto}}$ に対するコンセンサス定数であり、$\Sigma$ の通常遷移では変化しない。
@@ -155,7 +155,7 @@ $\mathsf{c}_{id}$ は決定的に導出される識別子であり、例えば
 \end{equation}
 のように作れる（重要なのは同一入力から一意であること）。
 ここで $\mathsf{tx}_{id}$ は CreateContract $tx$ の ID、$\mathsf{pk}_{\mathrm{from}}$ は CreateContract/LockUtxo を作成する主体の \textbf{from（送信元）} 公開鍵（入力 $u$ の所有者公開鍵）である。
-これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（R2, R3）。
+これにより「参照先インスタンスが曖昧」「後から差し替え」等の裁量余地を縮退する（B1）。
 
 \paragraph{Definition 8：$u^\star$：型付き状態}
 $u^\star$ は、テンプレート参照と状態タグを伴う型付き状態である、という設計選好を仕様として固定する。
@@ -166,7 +166,7 @@ $u^\star$（Definition 1）において、$\mathsf{c}_{id}$ は参照先イン�
 
 \subsection{遷移規則：CreateContract / LockUtxo / Release / FinalizeContract と Admissibility}
 本節では、$u^\star$ を生成・消費する遷移の妥当性を admissibility、すなわち許容条件として定義する。
-要件は「外部裁量ではなく検証可能」＝決定的 admissibility である（R2）。
+要件は「外部裁量ではなく検証可能」＝決定的 admissibility である（B1）。
 
 \paragraph{Definition 9：CreateContract / LockUtxo}
 \begin{itemize}
@@ -211,9 +211,9 @@ $\mathsf{chain\_time}$ はブロックヘッダ時刻ではなく、合意的時
 たとえば、期限経過により自動的に決着する遷移（$\operatorname{after}(d), \operatorname{after}(t)$）を $\ell_{\mathrm{final}}$ として与え、上の admissibility で検証可能にする。
 これにより資金が永久拘束されないこと（liveness）を仕様として扱える（RQ3）。
 
-\subsection{不変条件（Invariants）と要件 R1--R4 への対応}
+\subsection{不変条件（Invariants）と要件 A1--A3, B1 への対応}
 本稿は、資金拘束・解放を「人間の裁量」ではなく制度（検証規則）として固定し、失敗遷移（misappropriation）を排除／拘束することを狙う。
-以下、テンプレート型スマートコントラクトが満たすべき不変条件を定義し、R1--R4 と対応付ける（RQ3）。
+以下、テンプレート型スマートコントラクトが満たすべき不変条件を定義し、A1--A3, B1 と対応付ける（RQ3）。
 
 \paragraph{Invariant S（Safety）}
 任意の admissible $tx$ に対し、価値保存と受益者制約が破れない。
@@ -223,7 +223,7 @@ $\mathsf{chain\_time}$ はブロックヘッダ時刻ではなく、合意的時
 \end{itemize}
 
 \paragraph{Invariant A（Authority Safety）}
-Operator が単独で資金を不正流用できる遷移 $F$ が admissible にならない（R1）。
+Operator が単独で資金を不正流用できる遷移 $F$ が admissible にならない（A1）。
 典型には、署名条件・共同署名・期限付き自動遷移などで「単独での解放」を制度的に排除する。
 
 \paragraph{Invariant L（Liveness）}
@@ -231,15 +231,15 @@ Operator が単独で資金を不正流用できる遷移 $F$ が admissible に
 これは「FinalizeContract/Timeout が誰でも起動可能」等で与えられる（RQ3）。
 
 \paragraph{Invariant B（Bounded Auditability）}
-各テンプレート $\tau$ について、検証者が点検すべきロジックは $\mathsf{Bound}$ により上限付けられ、インスタンス化により複雑性が無制限に増えない（R3）。
+各テンプレート $\tau$ について、検証者が点検すべきロジックは $\mathsf{Bound}$ により上限付けられ、インスタンス化により複雑性が無制限に増えない（B1）。
 
 \paragraph{要件対応（まとめ）}
 \begin{itemize}
-	\item R1：$F$ を admissibility から排除（Authority Safety）
-	\item R2：$\mathsf{Pred}$ と $\mathsf{TransSpec}$ による決定的 admissibility
-	\item R3：テンプレートによる監査上限
-	\item R4：状態は基本的に UTXO を局所状態として扱う。
-	      共有される状態語彙は $\mathsf{stateTag}$ に限定し、参照情報は $\Gamma$ を不変として保持
+	\item A1：Operator 単独での終端資金移動（misappropriation / 任意解放）を admissibility から排除（Authority Safety）
+	\item A2：単独裁量による終端決着を排除し、合意または期限条件により遷移を拘束（reachability / Disc）
+	\item A3：期限条件により Locked 状態が永久残留しない（Liveness）
+	\item B1：$\mathsf{Pred}$/$\mathsf{TransSpec}$ をテンプレートとして制約し、検証量と監査対象を上限化
+	      （UTXO 上の局所状態、共有語彙は $\mathsf{stateTag}$、参照情報 $\Gamma$ は不変）
 \end{itemize}
 
 \subsection{次章への接続（テンプレート具体化）}

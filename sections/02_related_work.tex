@@ -11,6 +11,11 @@ Bitcoin Script/UTXOは、意図的に非チューリング完全なスタック�
 \cite{Chakravarty2020}
 この差は、単なる表現力の大小ではなく、\textbf{利用者がトランザクションに署名する時点で、何が起き得るかを事前に見積もれるか}（予測可能性）と、監査対象をどこまで上限化できるか、の差として現れる。汎用VM上の任意コードは、コード規模・依存・状態相互作用が膨張しやすく、結果として監査・検証の実務が第三者（監査者、運営、UI実装）に寄りやすい。一方で、許容遷移を列挙でき、成立条件と遷移結果が固定される設計は、署名行為を「意味の点検」に戻しやすい。
 
+\subsection{Scope Limits of Bitcoin Script for Multi-Party, Multi-Transaction Workflows}
+Bitcoin Script is designed primarily as a per-spend validation mechanism: a script determines whether a specific UTXO can be spent under given witness data. This model is well-suited to local, stateless checks for a single spend, but it does not natively represent a multi-step escrow workflow as a structured program that (i) coordinates multiple parties over multiple transactions and (ii) relies on shared references beyond the spending transaction’s local context.
+
+In particular, multi-party escrow requires a controlled sequence of state transitions (e.g., lock $\rightarrow$ release/refund $\rightarrow$ finalize) where the decision logic must remain auditable and where no single actor can unilaterally force terminal transfers. Our work positions itself in this gap: we provide an explicit transaction-level state machine with template-constrained transitions, keeping shared state minimal and verification bounded while supporting multi-party, multi-transaction coordination.
+
 \subsection{Limitations}
 WasmやRISC-Vのような別命令セットを採用した環境は「より良いVM」というよりも、依然としてVM型の実行環境である。
 Polkadot/ink!ではWasm実行環境とRISC-V/PolkaVMの併置や移行が明示されている。

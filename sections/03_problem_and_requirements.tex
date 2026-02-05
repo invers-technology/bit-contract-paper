@@ -79,22 +79,24 @@ D2. Multi-signature escrow：既存解
 
 対象を、資金拘束と解放条件の決定性、およびカストディ集中に起因する失敗遷移$F$の制度的排除／拘束に限定する。
 
+\subsection{Design Goals}
+We formalize the escrow problem in anonymous markets and derive requirements from two design goals:
+\textbf{(Goal A)} mediation without transferring asset-transfer authority to the operator, and
+\textbf{(Goal B)} smart-contract realization with minimal third-party trust by avoiding complex VM semantics and limiting the audit surface.
+
 \subsection{Requirements}
-上記の問題設定から、本稿は次の要件を導出する。
+From the goals above, we derive the following requirements.
 
-R1: Constrained custody / Non-custodial settlement
-Operatorが単独で資金を不正流用できる遷移$F$を、制度（検証規則）として排除または強く拘束すること。
+\textbf{A1 (Non-custodial mediation).} During mediation, the operator alone must not be able to transfer assets to any terminal payout state.
 
-R2: Deterministic admissibility：許容条件の決定性
-$S0 \to S1$（支払）および$S0 \to S2$（返金）の許容条件を、外部の裁量ではなく検証可能な条件として表現できること。
+\textbf{A2 (No unilateral settlement by a single party).} No single participant (buyer or seller) can unilaterally force a terminal transfer that contradicts the agreed workflow.
 
-R3: Bounded auditability：監査可能性の上限
-契約ロジックはテンプレートとして制約され、利用者・監査者が点検できる複雑性の上限を持つこと。
-テンプレートは作成後にアップグレードできない。
+\textbf{A3 (No permanent freezing / liveness).} Locked assets must not remain indefinitely frozen; a timeout-based path must guarantee eventual progress to a terminal state.
 
-R4: Local state / minimal shared state
-グローバルステートへの依存を避け、(e)UTXO等の局所状態とロック指向の資産移転で表現できること。
-共有状態は $\mathsf{stateTag}$ のみに限定する。
+\textbf{B1 (Bounded verification and minimal third-party trust).} Contract behavior should avoid general-purpose VM execution. Verification must be bounded and auditable by construction using a UTXO-based transaction model and readable, template-constrained predicates (computational-law style validation).
+
+\paragraph{Formalization mapping.}
+We will express A1 and A2 as reachability constraints over the contract state machine (e.g., $\mathrm{Disc}(\cdot)=\emptyset$ for single-actor discretionary terminal transitions), A3 as a liveness theorem enabled by timeout conditions, and B1 as a design constraint on the execution model (templates over UTXO, no global mutable state, bounded validation).
 
 \subsection{Research Questions}
 \paragraph{RQ1：決定的表現可能性}
@@ -114,7 +116,7 @@ $\mathrm{Disc}(\mathsf{Operator})=\varnothing$。
 すなわち、運営 $C$ の単独署名だけで $S1/S2$ に到達する admissible な遷移は存在しない。
 
 \paragraph{命題 P2'：裁量の移送}
-運営が関与する仲裁遷移は存在するが、それらは常に $(\mathsf{pk}_A \text{ or } \mathsf{pk}_B)$ の署名を伴うため、裁量は「運営単独」から「当事者の同意の証跡」へ移送される。
+運営が関与する仲裁遷移は存在するが、それらは常に $(\mathsf{pk}_A \text{ and } \mathsf{pk}_B)$ の署名を伴うため、裁量は「運営単独」から「当事者の同意の証跡」へ移送される。
 
 \paragraph{RQ3：不変条件の保証範囲}
 資金保全・権限安全・活性（デッドロックなし）を、不変条件としてどう定義し、どの範囲まで保証できるか？
