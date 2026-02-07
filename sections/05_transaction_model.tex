@@ -4,7 +4,6 @@
 まず、$tx$ を \textbf{Transfer Transaction} と \textbf{Contract Transaction} に二分する。
 Transfer Transaction はベースレイヤの通常価値移転であり、本稿の追加検証の対象外（前提）とする。
 Contract Transaction はテンプレート参照・$\mathsf{c}_{id}$・$\mathsf{stateTag}$・$\mathsf{TransSpec}$ により検証される契約系遷移である。
-Contract Transaction の型は \textbf{CreateContract}（\texttt{tx\_type=CREATE}）、\textbf{LockUtxo}（\texttt{tx\_type=LOCK}）、\textbf{ExecuteContract}（\texttt{tx\_type=EXECUTE}）、\textbf{FinalizeContract}（\texttt{tx\_type=FINALIZE}）の4種類である。
 典型的なライフサイクルは
 \[
 	\texttt{Create} \rightarrow \texttt{Lock} \rightarrow \texttt{Execute}^{\ast} \rightarrow (\texttt{Finalize} / \texttt{Timeout} / \texttt{Release})
@@ -17,69 +16,252 @@ $tx$ 型の判定は $\mathsf{in}/\mathsf{out}$ の有無などの否定条件�
 以降の具体化では、Escrow のテンプレート $\mathsf{t}_{index}=1$ と固定する。
 以下の表記は本章の $tx$ モデルに従う。
 \begin{enumerate}
-	\item オペレーター公開鍵 $\mathsf{pk}_C$ が、マージン率 $m$ を含めた CreateContract $tx$ を送信する。
-	\item 買い手公開鍵 $\mathsf{pk}_A$ が、価格 $p$ と販売者公開鍵 $\mathsf{pk}_B$ を含めた LockUtxo $tx$ を送信する。
-	\item 2 で参照した $\mathsf{c}_{id}$ に対して ExecuteContract $tx$（$tx_\ell$）を送信し、処理を行う。
+	\item オペレーター公開鍵 $\mathsf{pk}_C$ が、マージン率 $m$ を含めた CreateTx（CreateContract）$tx$ を送信する。
+	\item 買い手公開鍵 $\mathsf{pk}_A$ が、価格 $p$ と販売者公開鍵 $\mathsf{pk}_B$ を含めた LockTx（LockUtxo）$tx$ を送信する。
+	\item 2 で参照した $\mathsf{c}_{id}$ に対して ExecuteTx（ExecuteContract）$tx$（$tx_\ell$）を送信し、処理を行う。
 \end{enumerate}
+Contract Transaction の型は \textbf{CreateTx}（CreateContract; \texttt{tx\_type=CREATE}）、\textbf{LockTx}（LockUtxo; \texttt{tx\_type=LOCK}）、\textbf{ExecuteTx}（ExecuteContract; \texttt{tx\_type=EXECUTE}）、\textbf{FinalizeTx}（FinalizeContract; \texttt{tx\_type=FINALIZE}）の4種類である。
 
-\subsection{Contract Transaction 判定（\texttt{tx\_type} による分類）}
-Contract Transaction の分類は $\mathsf{aux}$ 内の \texttt{tx\_type} により一意に定まり、$\mathsf{in}/\mathsf{out}$ の形状から推測しない。
-特に $u^\star$ を入力に含む $tx$ は、未知 \texttt{tx\_type}/非canonical \texttt{aux}/必須フィールド欠落の場合は invalid とする（詳細は第4章の規範定義に従う）。
-Contract Transaction の型判定は $\mathsf{aux}$ に含まれる \texttt{tx\_type} に基づき、$\mathsf{in}/\mathsf{out}$ の欠如などの形推測では分類しない。
-判定手順は次である。
+\subsection*{Bitcoin Script 互換（Soft-fork）としての実装可能性（注記）}
+\begin{enumerate}
+	\item[(a)] 本稿の前提として、共有される動的状態は $\mathsf{stateTag}$ のみに限定し、その他の契約パラメータは LockTx（もしくはテンプレート参照 $\Gamma$）に固定されることを再確認する。
+	\item[(b)] “既存の Bitcoin Transfer Tx だけで” Create/Lock/Execute/Finalize を厳密に表現するのは困難であり、少なくともスクリプト拘束（標準形）の追加が必要である。
+	\item[(c)] 互換化の要点は次の2点である。
+	      \begin{itemize}
+		      \item \textbf{データ配置：} $\mathsf{c}_{id}$/$\mathsf{stateTag}$ は scriptPubKey / witness / commitment へ埋め込み可能（Taproot script-path 等）。
+		      \item \textbf{遷移拘束：} TransSpec 一致（出力・次 $\mathsf{stateTag}$ 等）を合意規則で強制するには covenant / tx-introspection 系（例：OP\_CHECKTEMPLATEVERIFY 等）を要し得る。
+	      \end{itemize}
+\end{enumerate}
+注：本稿のTx型（Create/Lock/Execute/Finalize）は、実装工数を許容すれば Taproot Script-path 等の Bitcoin Script 互換な拘束として近似できるが、遷移出力（TransSpec一致）を合意規則として厳密に強制するには covenant / tx-introspection 系の追加機構（例：OP\_CHECKTEMPLATEVERIFY 等）を要する。
+
+\subsection{Verification Pipeline（aux / in / out をいつ見るか）}
+本稿の $tx$ 検証は cheap $\rightarrow$ medium $\rightarrow$ strict の3段階とし、各段階で扱うデータ量を単調に増やす（DoS 耐性のため）。
+\begin{enumerate}
+	\item \textbf{Cheap prefilter（auxヘッダのみ）}
+	      \begin{itemize}
+		      \item \texttt{aux} の先頭には共通ヘッダ \texttt{proto\_version}, \texttt{codec\_id}, \texttt{tx\_type}, \texttt{payload\_len}, \texttt{cid}（または導出ヒント）を置く（\S5.3）。
+		      \item この段階では \texttt{payload} の fully decode を行わず、ヘッダの読取と長さ整合のみを確認する。
+		      \item \texttt{tx\_type} が \{\texttt{CREATE}, \texttt{LOCK}, \texttt{EXECUTE}, \texttt{FINALIZE}\} に含まれない場合は Contract Transaction として扱わず、Transfer Transaction の検証へフォールバックする。
+	      \end{itemize}
+	\item \textbf{Medium check（in/outの形を先に拘束）}
+	      \begin{itemize}
+		      \item \texttt{LOCK}/\texttt{EXECUTE}/\texttt{FINALIZE} は $\mathsf{in}/\mathsf{out}$ の拘束が本体であるため、payload の完全解釈より前に required input/output を検査する。
+		      \item 具体的には、State-UTXO（$u^\star$）等の required input の存在、および次 State-UTXO 等の required output の存在を型ごとに確認する（\S5.5）。
+	      \end{itemize}
+	\item \textbf{Strict check（payload fully decode + 検証）}
+	      \begin{itemize}
+		      \item canonical bytes 上で \texttt{payload} を fully decode し、型固有の TypeCheck / \texttt{cid} 再計算 / 遷移検証 / 署名・証明検証を実行する。
+		      \item $tx$ 種別は \texttt{tx\_type} によって一意に定め、$\mathsf{in}/\mathsf{out}$ の欠如等の否定条件で推測してはならない。
+	      \end{itemize}
+\end{enumerate}
+擬似コードは次である。
 \begin{quote}
 	\small
 	\begin{verbatim}
-Parse aux -> fields
-if fields.tx_type not in {CREATE, LOCK, EXECUTE, FINALIZE}: return NotContract Transaction
-if not HasRequiredFields(fields.tx_type, fields): return Invalid
-return StrictCheck(fields.tx_type, tx, fields)
+VerifyTx(tx):
+  hdr = ParseAuxHeader(tx.aux)
+  if hdr.tx_type not in {CREATE,LOCK,EXECUTE,FINALIZE}: return fallback
+  PrecheckInOutByType(tx, hdr.tx_type, hdr.cid)
+  payload = DecodeCanonical(tx.aux, hdr)
+  return StrictVerifyByType(tx, hdr, payload)
 \end{verbatim}
 \end{quote}
-\texttt{StrictCheck} は canonical TLV bytes 上での $\mathsf{TypeCheck}$、$\mathsf{c}_{id}$ 再計算、署名検証、入力消費、出力整合を含む。
-排他性は \texttt{tx\_type} の一意性によって担保され、同一 $tx$ が複数の型として成立しない。
-DoS 耐性の観点では、canonical TLV bytes と cheap check により検証コストを一定化し、形推測による余分な探索を避ける。
-合意安全性の観点では、\texttt{tx\_type} と byte[] を合意対象にすることで曖昧な解釈差を排除できる。
-将来拡張性の観点では、\texttt{proto\_version} と \texttt{args} により新型の追加を互換的に扱える。
 
-\subsection{Aux（args）の規範仕様と合意対象}
-本稿では、トランザクション補助データ \texttt{aux} を \textbf{canonicalized された TLV 列}として扱い、少なくとも \texttt{proto\_version}、\texttt{tx\_type}、\texttt{cid}、\texttt{args} を含むものとして規範化する。\texttt{args} は\textbf{型固有データ}であり、トランザクション種別ごとの入力を収容する。
+\subsection{Canonicalization and Encoding（auxはcanonical bytes）}
+\begin{itemize}
+	\item \texttt{aux}（および witness に載る引数・証明）は canonical bytes が合意対象であり、文字列（JSON 等）は非合意データである。
+	\item Java 実装では、合意対象データの内部表現を \texttt{byte[]} として保持し、ハッシュ・署名・検証は常に \texttt{byte[]} 上で行う。
+\end{itemize}
 
-合意・検証・\texttt{cid} 導出に用いる入力は、常に \textbf{シリアライズ済み TLV（bytes）}に固定する。例えば \texttt{init\_params\_bytes} のような \textit{bytes 表現}が合意対象であり、文字列表現（例：JSONや可読文字列）は表示・ログ用途の \textbf{非合意データ}に限定する。
+\paragraph{Canonicalization 要件.}
+\begin{itemize}
+	\item 整数は幅とエンディアンを固定する（例：\texttt{u8/u16/u32/u64} を big-endian）。
+	\item \texttt{cid} や各種ハッシュ値は raw bytes（例：\texttt{bytes32}）として扱い、16進文字列等を合意対象に含めない。
+	\item \texttt{aux} 内の構造化フィールドは Tag 昇順で並べ、同一 Tag の重複を禁止する（\S5.3）。
+	\item Length は固定幅（\texttt{u32}）として一意に符号化する（可変長を採る場合も最短表現のみ許容し、非canonical 表現は invalid）。
+	\item 文字列を合意対象に含めることは推奨しない。やむを得ず含める場合は UTF-8 に固定し、正規化規則を仕様で固定する。
+\end{itemize}
 
-また、\texttt{tx\_type} を合意対象として明示的に固定し、\texttt{tx\_type} $\in \{\mathrm{CREATE}, \mathrm{LOCK}, \mathrm{EXECUTE}, \mathrm{FINALIZE}\}$ とする。これは、型の曖昧解釈を排除して安価に分類できるようにし、DoS 耐性を高めると同時に、\texttt{proto\_version} と \texttt{args} によって将来拡張を可能にするためである。
+\subsection{TLV(TKV) Format for aux（タグ設計・長さ制限）}
+\paragraph{aux の全体構造.}
+\texttt{aux} は先頭に固定長の共通ヘッダを置き、その後ろに \texttt{payload} を配置する。\texttt{payload} は TLV（Tag--Length--Value; Tag を Key と呼ぶ場合もある）の列である。
 
-\subsection{CreateContract}
-Definition 9 の CreateContract に対応する。
-CreateContract は $\mathsf{aux}$ の \texttt{tx\_type} を \texttt{CREATE} とし、\texttt{t\_index}（または \texttt{schema\_id}）、\texttt{init\_params\_bytes}（canonical TLV）、および \texttt{cid} を含む。
-$\mathsf{c}_{id}$ は
-\begin{equation}
-	\mathsf{c}_{id} := H(\mathsf{tx}_{id} \parallel \mathsf{pk}_{\mathrm{from}} \parallel \mathsf{t}_{index} \parallel \mathsf{init\_params\_bytes})
-\end{equation}
-により再計算可能であることを要求する。
-ここで $\mathsf{tx}_{id}$ は CreateContract $tx$ の ID、$\mathsf{pk}_{\mathrm{from}}$ は入力 $u$ の所有者（送信元）を表す。
-$\mathsf{TypeCheck}$ は
-\begin{equation}
-	\mathsf{TypeCheck}(\mathsf{init\_params\_bytes}, \mathsf{ArgSchema}[\mathsf{t}_{index}])=\mathsf{true}
-\end{equation}
-を満たすことを要求する。
-\texttt{CreateTx} は $\mathsf{in}/\mathsf{out}$ が空である必要はなく、手数料支払い・Create+Lock 同梱のために $\mathsf{in}/\mathsf{out}$ を持ち得る。
-$\mathsf{out}$ に $\mathsf{to}=0x0$ の焼却出力を必須とする設計は採らず、仮に marker 出力を設ける場合も非合意（表示用）に限る。
-検証は (i) creator 認証（署名または入力所有の証明）、(ii) canonical TLV bytes 上の $\mathsf{TypeCheck}$、(iii) $\mathsf{c}_{id}$ 再計算一致を満たすことから成る。
-ここで $\mathsf{ArgSchema}[\mathsf{t}_{index}]$ はテンプレートの Constructor 引数スキーマである。
-DoS 対策として \texttt{CreateTx} に追加デポジットを必須化するのは第一選択ではなく、(i) canonical TLV bytes 化による検証コストの一定化、(ii) 手数料市場、(iii) 状態肥大を生む Lock/Execute の規律を優先する。
-The contract instantiation MUST create a dedicated \textsf{FeeReserve} output of value $R(V)$, funded from the operator fee budget.
-This output is later consumed by \textsf{FinalizeTx} to reward the finalizer and to cover a bounded transaction fee.
+\paragraph{用語（コミットメント）.}
+本稿では次を用いる（以降この語を用いる）：
+\begin{itemize}
+	\item \textbf{\texttt{staticCommit}:} 不変条件（当事者・閾値・期限・テンプレート参照 $\Gamma$・固定パラメータ等）のコミットメント（hash）。
+	\item \textbf{\texttt{stateTag}:} 動的状態のコミットメント（hash）。\texttt{ExecuteTx} によってのみ更新される。
+\end{itemize}
 
-\subsection{LockUtxo}
-Definition 9 の LockUtxo に対応する。
-$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{LOCK} とし、\texttt{cid} と \texttt{lock\_payload}（ロック条件・必要なら amount 等）を含む。
-LockUtxo は通常 $u$ を消費し、$(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ を伴う $u^\star$ を出力する。
-ロック出力は $\mathrm{P2CONTRACT}(\mathsf{c}_{id}, \mathsf{stateTag}=s_{\mathrm{init}})$ のように $\mathsf{c}_{id}$ と状態タグに結びつく形式であり、検証規則で一致を確認する。
-検証は入力の正当消費、ロック出力形式の一致、および必要なら amount の整合を含む。
-CreateContract と LockUtxo は実装上同一 $tx$ に畳めるが、\texttt{tx\_type} の排他性は維持される必要がある。
-本稿では (i) \texttt{tx\_type=LOCK} とし、\texttt{args} に create 情報（\texttt{init\_params\_bytes} 等）を含める方式を採用案とする。
-将来拡張として (ii) \texttt{tx\_type=CREATE\_LOCK} の複合型を導入する方式もあり得る。
+\paragraph{共通ヘッダ（固定順）.}
+\begin{itemize}
+	\item \texttt{proto\_version}: \texttt{u8}
+	\item \texttt{codec\_id}: \texttt{u8}（\texttt{0}=\texttt{TLV}）
+	\item \texttt{tx\_type}: \texttt{u8}（\texttt{1=CREATE}, \texttt{2=LOCK}, \texttt{3=EXECUTE}, \texttt{4=FINALIZE}）
+	\item \texttt{payload\_len}: \texttt{u32}（\texttt{payload} の総バイト長）
+	\item \texttt{cid}: \texttt{bytes32}（CREATE では宣言値だが strict で再計算一致を要求する）
+\end{itemize}
+ヘッダの整数は符号なしの big-endian とし、\texttt{payload\_len} は上限 $L_{\max}$（例：4096 bytes）を超えてはならない。
+また、\texttt{payload\_len} は \texttt{aux} の実バイト長と整合していなければならない（不一致は invalid）。
+
+\paragraph{TLV ルール（payload）.}
+\begin{itemize}
+	\item Tag: \texttt{u16}（big-endian）
+	\item Length: \texttt{u32}（big-endian）
+	\item Value: raw bytes
+	\item 並び順: Tag 昇順（canonical）
+	\item 重複 Tag: 禁止（duplicate tag は invalid）
+	\item 未知 Tag: strict では reject（\texttt{proto\_version} による将来拡張で扱う）
+\end{itemize}
+
+\begin{table}[t]
+	\centering
+	\small
+	\begin{tabular}{lllll}
+		\toprule
+		Tag             & フィールド名                     & 型（Value）         & 必須               & 最大長            \\
+		\midrule
+		\texttt{0x0100} & \texttt{TAG\_TINDEX}       & \texttt{u32}     & CREATE           & 4              \\
+		\texttt{0x0101} & \texttt{TAG\_NONCE}        & \texttt{u64}     & CREATE           & 8              \\
+		\texttt{0x0102} & \texttt{TAG\_INITPARAMS}   & \texttt{bytes}   & CREATE           & $\le L_{\max}$ \\
+		\texttt{0x0103} & \texttt{TAG\_CREATOR}      & \texttt{bytes}   & opt              & $\le L_{\max}$ \\
+		\texttt{0x0104} & \texttt{TAG\_SIG}          & \texttt{bytes}   & opt              & $\le L_{\max}$ \\
+		\midrule
+		\texttt{0x0200} & \texttt{TAG\_STATICCOMMIT} & \texttt{bytes32} & LOCK             & 32             \\
+		\texttt{0x0201} & \texttt{TAG\_INITSTATETAG} & \texttt{bytes32} & LOCK             & 32             \\
+		\texttt{0x0202} & \texttt{TAG\_STATICREVEAL} & \texttt{bytes}   & opt              & $\le L_{\max}$ \\
+		\midrule
+		\texttt{0x0300} & \texttt{TAG\_METHOD}       & \texttt{u32}     & EXECUTE          & 4              \\
+		\texttt{0x0301} & \texttt{TAG\_ARGS}         & \texttt{bytes}   & EXECUTE          & $\le L_{\max}$ \\
+		\texttt{0x0302} & \texttt{TAG\_PROOF}        & \texttt{bytes}   & EXECUTE/FINALIZE & $\le L_{\max}$ \\
+		\texttt{0x0303} & \texttt{TAG\_NEXTSTATETAG} & \texttt{bytes32} & EXECUTE          & 32             \\
+		\midrule
+		\texttt{0x0400} & \texttt{TAG\_FINALREASON}  & \texttt{u8}      & FINALIZE         & 1              \\
+		\texttt{0x0402} & \texttt{TAG\_PAYOUTCOMMIT} & \texttt{bytes32} & opt              & 32             \\
+		\bottomrule
+	\end{tabular}
+	\caption{aux payload の TLV タグ（例）}
+\end{table}
+
+\subsection{State Model and Data Placement（stateTagのみ動的）}
+\S5.3 で定義した \texttt{staticCommit} と \texttt{stateTag} を用い、State-UTXO（$u^\star$）は実装上 $(\mathsf{c}_{id}, \texttt{staticCommit}, \texttt{stateTag})$ にコミットするロック出力である（script/commitment への埋め込み）。
+
+\paragraph{単一状態（single-state）.}
+\begin{itemize}
+	\item 1 つの契約インスタンス（\texttt{cid}）につき、未消費の State-UTXO は常に高々 1 つでなければならない。
+	\item \texttt{LockTx} は State-UTXO をちょうど 1 つ生成し、\texttt{ExecuteTx} は State-UTXO をちょうど 1 つ消費して次 State-UTXO をちょうど 1 つ生成する。
+	\item 不変条件は \texttt{staticCommit} に固定し、遷移により更新され得る共有データは \texttt{stateTag} のみに限定する。
+\end{itemize}
+
+\paragraph{過去参照の回避.}
+\texttt{aux} に不変条件の実体を直接埋め込む設計は、検証時に過去 $tx$ 参照や参照関係の追跡を必要とし得る。
+本稿では、不変条件は LockTx（またはテンプレート参照 $\Gamma$）で確定し、そのコミットメント \texttt{staticCommit} を State-UTXO 側で引き回すことで、\texttt{ExecuteTx} が過去参照なしに検証できるようにする。
+
+\subsection{Additional Constraints per Tx Type（Create/Lock/Execute/Finalize）}
+本節では、\S5.1 のパイプラインに沿って、型ごとの追加制約を規範化する（A: Identification, B: Precheck, C: Strict Verify, D: Data Placement）。
+
+\subsubsection{CreateTx（CREATE; CreateContract）}
+\paragraph{A. Identification (aux header)}
+\begin{itemize}
+	\item ヘッダの \texttt{tx\_type} は \texttt{CREATE} でなければならない。
+\end{itemize}
+\paragraph{B. Precheck (in/out constraints before full decode)}
+\begin{itemize}
+	\item CreateTx は $\mathsf{in}/\mathsf{out}$ の有無で判定しない（手数料支払い等のために $\mathsf{in}/\mathsf{out}$ を持ち得る）。
+	\item 状態肥大を避けるため、CreateTx が State-UTXO を生成しないことを推奨する（状態生成は LockTx に寄せる）。
+\end{itemize}
+\paragraph{C. Strict Verify (payload decode + checks)}
+\begin{itemize}
+	\item payload から \texttt{tindex/schema\_id}, \texttt{nonce}, \texttt{init\_params\_bytes} を取得する。
+	\item $\mathsf{TypeCheck}(\texttt{init\_params\_bytes}, \mathsf{ArgSchema}[\texttt{tindex}])=\mathsf{true}$ を満たさなければならない。
+	\item \texttt{creator\_id} は署名検証等により同定される送信主体である（明示する場合は \texttt{TAG\_CREATOR} に格納する）。
+	\item \texttt{cid} は $\texttt{cid}=H(\texttt{creator\_id} \parallel \texttt{nonce} \parallel \texttt{tindex} \parallel \texttt{init\_params\_bytes})$ に一致しなければならない。
+	\item creator 認証（署名または入力所有の証明）に合格しなければならない。
+\end{itemize}
+\paragraph{D. Data Placement (out/witness/aux)}
+\begin{itemize}
+	\item \texttt{init\_params\_bytes} は canonical bytes とする。
+	\item JSON 等の文字列表現は非合意であり、保持する場合は optional debug に限定する。
+	\item payload(TLV)例：\texttt{TAG\_TINDEX(u32)}, \texttt{TAG\_NONCE(u64)}, \texttt{TAG\_INITPARAMS(bytes)}, \texttt{TAG\_CREATOR(bytes or implied)}, \texttt{TAG\_SIG(bytes)}.
+\end{itemize}
+
+\subsubsection{LockTx（LOCK; LockUtxo）}
+\paragraph{A. Identification (aux header)}
+\begin{itemize}
+	\item ヘッダの \texttt{tx\_type} は \texttt{LOCK} でなければならない。
+	\item \texttt{cid} を取得し、以降の in/out 拘束に用いる。
+\end{itemize}
+\paragraph{B. Precheck (in/out constraints before full decode)}
+\begin{itemize}
+	\item outputs に State-UTXO が必ず 1 つ存在しなければならない。
+	\item その State-UTXO は \texttt{cid} と \texttt{staticCommit} を含み（script/commitment への埋め込み）、初期 \texttt{stateTag} を含まなければならない。
+\end{itemize}
+\paragraph{C. Strict Verify (payload decode + checks)}
+\begin{itemize}
+	\item payload から \texttt{staticCommit} 生成に必要なパラメータ（または \texttt{staticReveal}）を取得し、State-UTXO がコミットする \texttt{staticCommit} と一致することを検証する。
+	\item 初期 \texttt{stateTag} の正当性（\texttt{init\_params\_bytes} 等から導出する場合は一致）を検証する。
+	\item ロック条件（当事者/閾値/期限等）が \texttt{staticCommit} に含まれる（不変化される）ことを検証する。
+\end{itemize}
+\paragraph{D. Data Placement (out/witness/aux)}
+\begin{itemize}
+	\item 不変条件の実体は off-chain でもよい。オンチェーンでは \texttt{staticCommit} にコミットされていればよい。
+	\item amount は \texttt{out.value} を正とし、aux に重複保持しない（齟齬防止）。
+	\item payload(TLV)例：\texttt{TAG\_STATICCOMMIT(bytes32)}, \texttt{TAG\_INITSTATETAG(bytes32)}, \texttt{TAG\_STATICREVEAL(bytes)}, \texttt{TAG\_SIG(bytes)}.
+\end{itemize}
+
+\subsubsection{ExecuteTx（EXECUTE; ExecuteContract）}
+\paragraph{A. Identification (aux header)}
+\begin{itemize}
+	\item ヘッダの \texttt{tx\_type} は \texttt{EXECUTE} でなければならない。
+	\item \texttt{cid} を取得し、State-UTXO の整合に用いる。
+\end{itemize}
+\paragraph{B. Precheck (in/out constraints before full decode)}
+\begin{itemize}
+	\item inputs に「現在の State-UTXO」が必ず 1 つ含まれなければならない（単一状態）。
+	\item outputs に「次の State-UTXO」が必ず 1 つ存在しなければならない。
+	\item input と output で \texttt{cid} と \texttt{staticCommit} は不変でなければならない（一致）。
+\end{itemize}
+\paragraph{C. Strict Verify (payload decode + checks)}
+\begin{itemize}
+	\item payload から \texttt{method\_id}, \texttt{args\_bytes}, \texttt{proof/witness}, \texttt{next\_stateTag} を取得する。
+	\item \texttt{next\_stateTag} が $\mathsf{Transition}(\texttt{input.stateTag}, \texttt{method\_id}, \texttt{args\_bytes}, \texttt{proof}, \texttt{staticCommit})$ と一致することを検証する。
+	\item output がコミットする \texttt{stateTag} が \texttt{next\_stateTag} に一致しなければならない。
+	\item 支払いが伴う場合は、value 更新規則（受取先/上限等が \texttt{staticCommit} で規定されること）を検証する。
+\end{itemize}
+\paragraph{D. Data Placement (out/witness/aux)}
+\begin{itemize}
+	\item call\_data/proof は witness（または aux payload）でよいが canonical bytes とする。
+	\item 過去 $tx$ 参照は禁止とし、必要な不変条件は \texttt{staticCommit} と整合させて検証する。
+	\item payload(TLV)例：\texttt{TAG\_METHOD(u32)}, \texttt{TAG\_ARGS(bytes)}, \texttt{TAG\_PROOF(bytes)}, \texttt{TAG\_NEXTSTATETAG(bytes32)}.
+\end{itemize}
+
+\subsubsection{FinalizeTx（FINALIZE; FinalizeContract）}
+\paragraph{A. Identification (aux header)}
+\begin{itemize}
+	\item ヘッダの \texttt{tx\_type} は \texttt{FINALIZE} でなければならない。
+\end{itemize}
+\paragraph{B. Precheck (in/out constraints before full decode)}
+\begin{itemize}
+	\item inputs に State-UTXO を必ず含まなければならない。
+	\item outputs に State-UTXO を含めない（終端）ことを仕様として固定する。
+\end{itemize}
+\paragraph{C. Strict Verify (payload decode + checks)}
+\begin{itemize}
+	\item 終端条件（期限到来/双方署名等）が \texttt{staticCommit} 規定に合致することを検証する。
+	\item 支払い分配が規定通りであることを検証する。
+\end{itemize}
+\paragraph{D. Data Placement (out/witness/aux)}
+\begin{itemize}
+	\item finalize の根拠（署名/証明）は witness/aux に canonical bytes として保持する。
+	\item payload(TLV)例：\texttt{TAG\_FINALREASON(u8)}, \texttt{TAG\_PROOF(bytes)}, \texttt{TAG\_PAYOUTCOMMIT(bytes32)}.
+\end{itemize}
+
+\subsection{(Optional) Create+Lock同梱}
+\begin{itemize}
+	\item 実装上、Create と Lock を単一 $tx$ に畳み込める。
+	\item ただし \texttt{tx\_type} の排他性を崩さないため、本稿では \textbf{(i) \texttt{tx\_type=LOCK} に統一し、payload に Create 相当（\texttt{tindex/init\_params/nonce} 等）も含める}方式を採用する。
+	\item \texttt{tx\_type=CREATE\_LOCK} の複合型を追加する方式は、将来拡張の選択肢としてのみ言及に留める。
+\end{itemize}
 
 \subsection{FeeReserve output}
 We introduce a dedicated UTXO output, \textsf{FeeReserve}, whose value is fixed to $R(V)$ and whose spending is restricted by the \textsf{Finalize} template.
@@ -91,23 +273,6 @@ Let $\mathrm{OpFee}(V)$ denote the operator fee budget. The construction MUST sa
 	\mathrm{OpFee}(V) \ge R(V),
 \]
 so that $R(V)$ can be reserved without touching the principal.
-
-\subsection{ExecuteContract}
-$u^\star$ を入力として消費する ExecuteContract $tx_\ell$ を指す。
-ここで $\ell$ は遷移ラベルである。
-$\mathsf{aux}$ の \texttt{tx\_type} は \texttt{EXECUTE} とし、\texttt{cid}、\texttt{call\_data\_bytes}（canonical）、\texttt{proof/witness}、\texttt{state\_ref} を含む。
-この $tx_\ell$ は現在状態（または状態ロック）の $u^\star$ を $\mathsf{in}$ として消費しなければならず、$\mathsf{aux}$ だけでは二重実行を防げないことを明示する。
-出力は次状態の $u^{\star\prime}$ を生成し、$(\mathsf{c}_{id}, \mathsf{stateTag}=s')$ で状態更新を表す。
-admissible 判定は第4章の $\mathsf{Pred}_{\tau,\ell}$ と $\mathsf{TransSpec}_{\tau,\ell}$ に従い、(i) 消費される $\mathsf{in}$ が $(\mathsf{c}_{id}, \mathsf{stateTag}=s)$ に一致、(ii) 遷移検証（Pred/TransSpec）に合格、(iii) 出力が次状態仕様に一致、を満たす。
-
-継続遷移であれば $\mathsf{out}(tx)$ は次状態の $u^{\star\prime}(\dots,\mathsf{c}_{id}, \mathsf{stateTag}=s')$ を含み、終端遷移であれば受益者への通常 $u$ とお釣り等のみを含む。
-
-\subsection{FinalizeContract}
-Definition 11 で導入した確定遷移 FinalizeContract に対応する。
-期限経過 $\operatorname{after}(d)$ や $\operatorname{after}(t)$ に対応する遷移ラベル $\ell_{\mathrm{final}}$ を与え、admissibility と同じ枠組みで検証可能にする。
-Contract Transaction 共通ヘッダに従い、\texttt{tx\_type} は \texttt{FINALIZE} とする（任意）。
-誰でも起動可能な確定遷移として扱い、活性（デッドロック回避）に接続する。
-
 \subsection{FinalizeTx (public finalization)}
 Finalization MAY be performed by any actor (operator, buyer, seller, or a third party) to ensure liveness.
 Let $\mathrm{pk}_F$ denote the public key of the finalizer (the transaction issuer).

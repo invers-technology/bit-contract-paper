@@ -52,21 +52,21 @@ Bitcoinと同様に、本稿の $tx$ は from/to アドレスを明示的なフ�
 本稿で $\mathsf{pk}_{\mathrm{from}}$ と記す場合は、入力 $u$ の所有者（消費権限の主体）を指す略記であり、明示フィールドではなく入力の検証から同定される。
 
 \paragraph{Contract Transaction 共通ヘッダ（aux）}
-本稿で扱う Contract Transaction の $\mathsf{aux}$ は canonical encoding された byte 列とし、少なくとも\texttt{proto\_version}、\texttt{tx\_type} $\in \{\mathrm{CREATE},\mathrm{LOCK},\mathrm{EXECUTE},\mathrm{FINALIZE}\}$、\texttt{cid}、\texttt{args}を含む。
-ここで \texttt{args} は型固有データである。
+本稿で扱う Contract Transaction の $\mathsf{aux}$ は canonical encoding された byte 列とし、先頭に共通ヘッダ \texttt{proto\_version}、\texttt{codec\_id}、\texttt{tx\_type} $\in \{\mathrm{CREATE},\mathrm{LOCK},\mathrm{EXECUTE},\mathrm{FINALIZE}\}$、\texttt{payload\_len}、\texttt{cid} を置き、続く \texttt{payload} に型固有データを格納する。
+ここで \texttt{payload} は型固有データである。
 合意・検証・$\mathsf{c}_{id}$ 導出に用いるのは必ずシリアライズ済み byte[]（例：\texttt{init\_params\_bytes}）であり、JSON などの文字列表現は表示・ログ用途の非合意データに限る。
-\texttt{tx\_type} を合意対象として固定するのは、型の曖昧解釈を排除し、安価な分類で DoS 耐性を高め、\texttt{proto\_version}/\texttt{args} により将来拡張を可能にするためである。
-$\mathsf{aux}$ は合意対象データ（consensus-critical bytes）であり、Contract Transaction の wire-level encoding は TLV（Type-Length-Value）として規範化する。
-すなわち、$\mathsf{aux}$ 内の \texttt{proto\_version}/\texttt{tx\_type}/\texttt{args}は canonical TLV bytes として一意に解釈される。
+\texttt{tx\_type} を合意対象として固定するのは、型の曖昧解釈を排除し、安価な分類で DoS 耐性を高め、\texttt{proto\_version}/\texttt{codec\_id} により将来拡張を可能にするためである。
+$\mathsf{aux}$ は合意対象データ（consensus-critical bytes）であり、Contract Transaction の wire-level encoding は共通ヘッダ＋\texttt{payload}（TLV）として規範化する。
+すなわち、$\mathsf{aux}$ 内の \texttt{payload} は canonical TLV bytes として一意に解釈される。
 Ethereum の Typed Transaction Envelope と同様に型情報を明示しつつ（括弧内での言及に留める）、Bitcoin の raw $tx$ が byte 列として合意対象であることと同じく、合意に用いる入力は canonical TLV bytes に固定される。
 規範仕様は次のとおりである。
 \begin{itemize}
-	\item Type：u16 の big-endian
-	\item Length：unsigned LEB128 varint（最短表現のみ許容。非canonical表現は invalid）
+	\item Tag（Type）：u16 の big-endian
+	\item Length：u32 の big-endian
 	\item Value：raw bytes
-	\item 要素順序：Type 昇順でソート
-	\item 重複 Type：禁止（duplicate type は invalid）
-	\item 未知 Type：$u^\star$ を入力に含む $tx$ では unknown type を invalid とし、それ以外は将来拡張のために skip 可とする
+	\item 要素順序：Tag 昇順でソート
+	\item 重複 Tag：禁止（duplicate tag は invalid）
+	\item 未知 Tag：strict では reject（将来拡張は \texttt{proto\_version}/\texttt{codec\_id} で扱う）
 \end{itemize}
 固定長整数の値表現は big-endian とする。
 $c_{id}$/署名/検証の合意対象は canonical TLV bytes であり、例として \texttt{init\_params\_bytes} は canonical TLV bytes として扱う。
